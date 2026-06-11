@@ -178,3 +178,12 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v1.3 — Commentary button: Claude-written where possible, local cliché engine everywhere; published.
+
+## Commentary predictions rework (v1.4)
+- Predictions are now sweepstake duels: each fixture names the two family owners with their current table positions ("Jonathan (4th) locks horns with George (20th)"), then states what a win could do ("an Ivory Coast win rockets Jonathan up to 2nd, while three points lifts George to 7th").
+- Hypothetical position uses full tiebreak logic (points, then GD assuming a one-goal win, then GF) so early-tournament climbs read realistically rather than everyone "rocketing to 2nd".
+- Special cases: one player owning both teams ("can't lose, can't win, totally zen"), knockout placeholders ("the table holds its breath"). a/an article handling for team names.
+- Tone shifted folksier and warmer per user request — relentlessly optimistic coach energy layered over the commentator clichés; randomised kicker lines ("Pressure? Pressure is for tyres.", "Winner gets bragging rights; loser gets character."). Claude-path prompt updated to demand the same duel framing, table stakes, and warm humour.
+
+## Change log (cont.)
+- v1.4 — Duel-framed predictions with table stakes; folksy-optimist tone; published.
