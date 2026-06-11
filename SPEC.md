@@ -145,3 +145,13 @@ Third button: **"Leaderboard"** — WhatsApp-ready standings across all 24 playe
 
 ## Change log (cont.)
 - v0.11 — Embedded 72 announced group-stage UK channels; offline-first channel resolution; documented mobile-app network reality.
+
+## Deployment — LIVE (v1.0)
+- Hosted on GitHub Pages: https://paulshep.github.io/worldcup2026/ (repo paulshep/worldcup2026, public, deploy-from-branch main:/, build verified 11 Jun 2026).
+- index.html (the app) and SPEC.md are both in the repo.
+- In the hosted environment: fixtures/venues/channels work from embedded data; scores fetch live from openfootball directly (no Claude needed for the group stage).
+- Update routes: push a new index.html via a fresh short-lived PAT, edit via GitHub's web editor, or regenerate here.
+- Pending future work: embed knockout TV channels when announced (~late June); decide penalty-shootout W/D/L rule before Round of 32 (28 June).
+
+## Change log (cont.)
+- v1.0 — Published to GitHub Pages; deployment verified via API.
