@@ -534,22 +534,53 @@ function localCommentary(results, scores, prevRows, currRows, todays){
     L.push("");
   }
 
-  /* Predictions */
+  /* Predictions \u2014 sweepstake grudge matches with table stakes */
+  const posOf = {}; const ptsOf = {};
+  currRows.forEach((r, i) => { posOf[r.p] = i + 1; ptsOf[r.p] = r.Pts; });
+  const ordinal = n => n + (n%10==1&&n%100!=11?"st":n%10==2&&n%100!=12?"nd":n%10==3&&n%100!=13?"rd":"th");
+  const climbWithWin = p => {
+    const me = currRows.find(r => r.p === p);
+    const hyp = me.Pts + 3, hypGD = me.GD + 1;  // assume a one-goal win
+    let newPos = 1;
+    currRows.forEach(r => {
+      if(r.p === p) return;
+      if(r.Pts > hyp || (r.Pts === hyp && (r.GD > hypGD || (r.GD === hypGD && r.GF > me.GF + 1)))) newPos++;
+    });
+    return Math.min(newPos, posOf[p]);
+  };
+  const an = w => (/^[AEIOUaeiou]/.test(w) ? "an " : "a ") + w;
   if(todays.length > 0){
-    L.push(pick(["TO TONIGHT'S FARE, and my predictions \u2014 cut them out and keep them:",
-                 "AND SO TO TODAY \u2014 the crystal ball says:"]));
+    L.push(pick(["RIGHT THEN, TO TODAY'S GRUDGE MATCHES \u2014 and remember, it's only family:",
+                 "AND SO TO TODAY. Two things in life are certain: kick-offs and sibling rivalry:",
+                 "TO THE CRYSTAL BALL \u2014 and folks, believe in something today, even if it's just extra time:"]));
     todays.forEach(({m, ko}) => {
       const p1 = TEAM_TO_PLAYER[m.a], p2 = TEAM_TO_PLAYER[m.b];
-      const fav = Math.random() < 0.5 ? [m.a, p1] : [m.b, p2];
-      L.push("\u2022 " + m.a + " v " + m.b + " (" + ukTime(ko) + "): " + pick([
-        "I fancy " + fav[0] + " by the odd goal" + (fav[1] ? " \u2014 advantage " + fav[1] : "") + ".",
-        "goalless draw written all over it. Write it down.",
-        fav[0] + " to shade it on a night of high drama" + (m.g ? " in " + venueLabel(m.g) : "") + ".",
-        "this one's got 2\u20132 and late, late drama stamped right through it."
+      const head = "\u2022 " + m.a + " v " + m.b + " (" + ukTime(ko) + "): ";
+      if(p1 && p2 && p1 === p2){
+        L.push(head + p1 + " owns BOTH teams \u2014 can't lose, can't win, totally zen. We should all live like " + p1 + " today.");
+        return;
+      }
+      if(!p1 || !p2){
+        L.push(head + "knockout territory \u2014 the table holds its breath.");
+        return;
+      }
+      const duel = p1 + " (" + ordinal(posOf[p1]) + ") locks horns with " + p2 + " (" + ordinal(posOf[p2]) + ") in the sweepstake. ";
+      const c1 = climbWithWin(p1), c2 = climbWithWin(p2);
+      const stakes = [];
+      if(c1 < posOf[p1]) stakes.push(an(m.a) + " win rockets " + p1 + " up to " + ordinal(c1));
+      if(c2 < posOf[p2]) stakes.push("three points lifts " + p2 + " to " + ordinal(c2));
+      const stakeLine = stakes.length ? stakes.join(", while ") + ". " : "";
+      L.push(head + duel + stakeLine + pick([
+        "My heart says both of you, my head says hydrate and enjoy it.",
+        "I believe in " + pick([p1,p2]) + " today. Heck, I believe in everyone. But mostly " + pick([p1,p2]) + ".",
+        "This one smells like the odd goal and a very smug breakfast for someone.",
+        "Whatever happens, be curious in the group chat, not judgemental.",
+        "Pressure? Pressure is for tyres. Go enjoy yourselves, you two.",
+        "Winner gets bragging rights; loser gets character. Everybody grows."
       ]));
     });
   } else {
-    L.push("No football today \u2014 use the time wisely. Speak to your families.");
+    L.push("No football today \u2014 a rest day. Call your mother. Tell her about the goal difference.");
   }
   L.push("");
   L.push(pick(["That's all from me. Football \u2014 it's a funny old game. See you tomorrow!",
@@ -577,9 +608,12 @@ async function buildCommentaryMsg(matches, setStatus){
       yesterdays_results: results.map(m => ({match: m.a + " v " + m.b, score: scores[mKey(m)] || "unknown",
         owners: [TEAM_TO_PLAYER[m.a], TEAM_TO_PLAYER[m.b]]})),
       table_top5: currRows.slice(0,5).map((r,i) => (i+1) + ". " + r.p + " " + r.Pts + "pts GD" + r.GD),
-      todays_fixtures: todays.map(x => x.m.a + " v " + x.m.b + " at " + ukTime(x.ko) + " BST" + (x.m.g ? " in " + venueLabel(x.m.g) : ""))
+      table: currRows.map((r,i) => (i+1) + ". " + r.p + " " + r.Pts + "pts GD" + (r.GD>=0?"+":"") + r.GD),
+      todays_fixtures: todays.map(x => ({match: x.m.a + " v " + x.m.b, time: ukTime(x.ko) + " BST",
+        venue: x.m.g ? venueLabel(x.m.g) : null,
+        sweepstake_duel: (TEAM_TO_PLAYER[x.m.a] || "?") + " vs " + (TEAM_TO_PLAYER[x.m.b] || "?")}))
     };
-    return await askClaudeText("Write a WhatsApp message (under 200 words, plain text, no markdown) in the voice of a stereotypical traditional British football commentator: breathless, cliche-laden, warm. It is for a family World Cup sweepstake where each person owns teams. Cover: (1) yesterday's results with drama, crediting the family owners; (2) the state of the sweepstake table; (3) confident tongue-in-cheek predictions for today's fixtures. Data: " + JSON.stringify(data));
+    return await askClaudeText("Write a WhatsApp message (under 220 words, plain text, no markdown) blending a breathless traditional British football commentator with a relentlessly optimistic, folksy, warm-hearted coach: cliche-laden, kind, funny. It is for a family World Cup sweepstake where each person owns teams. Cover: (1) yesterday\'s results with drama, crediting the family owners; (2) the sweepstake table; (3) predictions for today framed as head-to-head duels BETWEEN THE FAMILY PLAYERS named in sweepstake_duel, saying what a win could mean for each player\'s position in the table (use the table data). Keep it fun, never mean. Data: " + JSON.stringify(data));
   }catch(_){
     return localCommentary(results, scores, prevRows, currRows, todays);
   }
