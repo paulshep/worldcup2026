@@ -78,6 +78,7 @@
     <button class="gen" id="btnToday">Today's matches<small>kick-offs in UK time</small></button>
     <button class="gen" id="btnTomorrow">Tomorrow's matches<small>plan ahead — UK times</small></button>
     <button class="gen" id="btnLeaderboard">Leaderboard<small>played, W-D-L, goal difference</small></button>
+    <button class="gen" id="btnCommentary">Commentary<small>the beautiful game, in words</small></button>
   </div>
   <div class="status" id="status"></div>
 
@@ -382,6 +383,34 @@ async function gatherAllScores(matches, setStatus){
   return {finished, scores};
 }
 
+function computeRows(table){
+  return PLAYERS.map(([p]) => {
+    const r = table[p];
+    return {p, ...r, GD: r.GF - r.GA, Pts: r.W*3 + r.D};
+  }).sort((x,y) => y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || x.p.localeCompare(y.p));
+}
+
+function tallyTable(matchList, scores){
+  const table = {};
+  PLAYERS.forEach(([p]) => table[p] = {P:0, W:0, D:0, L:0, GF:0, GA:0});
+  matchList.forEach(m => {
+    const s = scores[mKey(m)];
+    if(!s) return;
+    const pens = s.length === 4 ? [s[2], s[3]] : null;
+    [[m.a, s[0], s[1], pens ? pens[0]-pens[1] : 0], [m.b, s[1], s[0], pens ? pens[1]-pens[0] : 0]].forEach(([team, gf, ga, pdiff]) => {
+      const p = TEAM_TO_PLAYER[team];
+      if(!p) return;
+      const r = table[p];
+      r.P++; r.GF += gf; r.GA += ga;
+      if(gf > ga) r.W++;
+      else if(gf < ga) r.L++;
+      else if(pens){ if(pdiff > 0) r.W++; else r.L++; }
+      else r.D++;
+    });
+  });
+  return table;
+}
+
 function buildLeaderboardMsg(finished, scores, niceDay){
   const table = {};
   PLAYERS.forEach(([p]) => table[p] = {P:0, W:0, D:0, L:0, GF:0, GA:0});
@@ -404,10 +433,7 @@ function buildLeaderboardMsg(finished, scores, niceDay){
   });
   if(counted === 0) return "\u26bd WORLD CUP 2026 \u2014 LEADERBOARD\n\nNo completed matches yet \u2014 check back after the first results!";
 
-  const rows = PLAYERS.map(([p]) => {
-    const r = table[p];
-    return {p, ...r, GD: r.GF - r.GA, Pts: r.W*3 + r.D};
-  }).sort((x,y) => y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || x.p.localeCompare(y.p));
+  const rows = computeRows(table);
 
   const medals = ["\ud83e\udd47","\ud83e\udd48","\ud83e\udd49"];
   let lines = [], pos = 0, prev = null;
@@ -423,11 +449,147 @@ function buildLeaderboardMsg(finished, scores, niceDay){
   return msg;
 }
 
+
+/* ---------- Commentary (traditional British commentator voice) ---------- */
+async function askClaudeText(prompt){
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [{role:"user", content: prompt}]
+    })
+  });
+  const raw = await resp.text();
+  if(!resp.ok) throw new Error("HTTP " + resp.status);
+  const data = JSON.parse(raw);
+  if(data.type === "error" || data.error) throw new Error("API error");
+  const text = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("\n").trim();
+  if(!text) throw new Error("empty reply");
+  return text;
+}
+
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+function localCommentary(results, scores, prevRows, currRows, todays){
+  const L = [];
+  L.push(pick([
+    "\ud83c\udf99\ufe0f GOOD EVENING AND WELCOME, wherever in the world you are!",
+    "\ud83c\udf99\ufe0f HELLO AND WELCOME to another unmissable day of this remarkable World Cup!",
+    "\ud83c\udf99\ufe0f WELL. Take a breath, pour the tea \u2014 what a tournament this is turning into!"
+  ]));
+  L.push("");
+
+  if(results.length === 0){
+    L.push(pick([
+      "Not a ball kicked yesterday \u2014 a chance for tired legs and frayed nerves to recover.",
+      "A rest day yesterday, and frankly, after the football we've seen, we all needed one."
+    ]));
+  } else {
+    results.forEach(m => {
+      const sc = scores[mKey(m)];
+      const p1 = TEAM_TO_PLAYER[m.a], p2 = TEAM_TO_PLAYER[m.b];
+      if(!sc){
+        L.push(m.a + " and " + m.b + " did battle, but word of the final score hasn't reached the gantry yet.");
+        return;
+      }
+      const diff = sc[0] - sc[1];
+      const line = teamLabel(m.a) + " " + sc[0] + "\u2013" + sc[1] + " " + teamLabel(m.b) + scoreSuffix(sc);
+      let colour;
+      if(sc.length === 4){
+        const w = sc[2] > sc[3] ? [m.a, p1] : [m.b, p2];
+        colour = pick(["Penalties! You simply could not write it \u2014 and it's " + w[1] + "'s " + w[0] + " holding their nerve from twelve yards.",
+                       "Drama of the very highest order \u2014 " + w[0] + " win the shootout and " + w[1] + " breathes again!"]);
+      } else if(diff === 0){
+        colour = pick(["Honours even, and you'd say neither " + (p1||"") + " nor " + (p2||"") + " will sleep easy.",
+                       "A point apiece \u2014 a proper game of two halves, that."]);
+      } else {
+        const wTeam = diff > 0 ? m.a : m.b, wPlayer = diff > 0 ? p1 : p2;
+        const margin = Math.abs(diff);
+        colour = margin === 1 ? pick([wTeam + " edge it by the odd goal \u2014 " + wPlayer + " punching the air in the group chat!",
+                                       "Squeaky-bum time right to the end, but " + wTeam + " see it out for " + wPlayer + "."])
+               : margin === 2 ? pick(["Comfortable in the end for " + wTeam + " \u2014 the boy " + wPlayer + " done good.",
+                                       wTeam + " with daylight between the sides \u2014 " + wPlayer + " will take that all day long."])
+               : pick(["AN ABSOLUTE DEMOLITION! " + wTeam + " run riot and " + wPlayer + " is dreaming of the trophy already.",
+                       wTeam + " simply magnificent \u2014 they could have had six! " + wPlayer + " in dreamland."]);
+      }
+      L.push(line); L.push(colour); L.push("");
+    });
+  }
+
+  /* Table talk */
+  if(currRows[0].Pts > 0){
+    const leader = currRows[0];
+    L.push("AS FOR THE TABLE: make no mistake, " + leader.p + " sits atop the pile \u2014 " + leader.Pts + " points, goal difference " + (leader.GD>=0?"+":"") + leader.GD + ".");
+    const prevPos = {}; prevRows.forEach((r,i) => prevPos[r.p] = i);
+    let best = null;
+    currRows.forEach((r,i) => {
+      const up = prevPos[r.p] - i;
+      if(up > 0 && (!best || up > best.up)) best = {p:r.p, up};
+    });
+    if(best) L.push("The big mover? " + best.p + ", up " + best.up + " place" + (best.up>1?"s":"") + " overnight \u2014 they'll tell their grandchildren about this.");
+    const bottom = currRows[currRows.length-1];
+    if(bottom.P > 0 && bottom.Pts === 0) L.push("And spare a thought for " + bottom.p + ". It's been a baptism of fire, no two ways about it.");
+    L.push("");
+  }
+
+  /* Predictions */
+  if(todays.length > 0){
+    L.push(pick(["TO TONIGHT'S FARE, and my predictions \u2014 cut them out and keep them:",
+                 "AND SO TO TODAY \u2014 the crystal ball says:"]));
+    todays.forEach(({m, ko}) => {
+      const p1 = TEAM_TO_PLAYER[m.a], p2 = TEAM_TO_PLAYER[m.b];
+      const fav = Math.random() < 0.5 ? [m.a, p1] : [m.b, p2];
+      L.push("\u2022 " + m.a + " v " + m.b + " (" + ukTime(ko) + "): " + pick([
+        "I fancy " + fav[0] + " by the odd goal" + (fav[1] ? " \u2014 advantage " + fav[1] : "") + ".",
+        "goalless draw written all over it. Write it down.",
+        fav[0] + " to shade it on a night of high drama" + (m.g ? " in " + venueLabel(m.g) : "") + ".",
+        "this one's got 2\u20132 and late, late drama stamped right through it."
+      ]));
+    });
+  } else {
+    L.push("No football today \u2014 use the time wisely. Speak to your families.");
+  }
+  L.push("");
+  L.push(pick(["That's all from me. Football \u2014 it's a funny old game. See you tomorrow!",
+               "Right, that's your lot from the gantry. Don't have nightmares about the 3am kick-offs!",
+               "The World Cup waits for no one \u2014 until tomorrow, good night and good football!"]));
+  return "\u26bd\ud83c\udf99\ufe0f THE COMMENTARY BOX\n\n" + L.join("\n");
+}
+
+async function buildCommentaryMsg(matches, setStatus){
+  const now = new Date();
+  const yest = new Date(now.getTime() - 24*3600*1000);
+  const yDay = ukDateStr(yest), tDay = ukDateStr(now);
+  const {finished, scores} = await gatherAllScores(matches, setStatus);
+  const results = matches.filter(m => { const ko = kickoffUTC(m); return ko && ukDateStr(ko) === yDay; });
+  const todays = matches.map(m => ({m, ko: kickoffUTC(m)}))
+    .filter(x => x.ko && ukDateStr(x.ko) === tDay).sort((a,b) => a.ko - b.ko);
+  const before = finished.filter(m => { const ko = kickoffUTC(m); return ukDateStr(ko) < yDay; });
+  const prevRows = computeRows(tallyTable(before, scores));
+  const currRows = computeRows(tallyTable(finished, scores));
+
+  /* Prefer Claude-written commentary when the environment allows */
+  setStatus("Warming up the commentary box\u2026");
+  try{
+    const data = {
+      yesterdays_results: results.map(m => ({match: m.a + " v " + m.b, score: scores[mKey(m)] || "unknown",
+        owners: [TEAM_TO_PLAYER[m.a], TEAM_TO_PLAYER[m.b]]})),
+      table_top5: currRows.slice(0,5).map((r,i) => (i+1) + ". " + r.p + " " + r.Pts + "pts GD" + r.GD),
+      todays_fixtures: todays.map(x => x.m.a + " v " + x.m.b + " at " + ukTime(x.ko) + " BST" + (x.m.g ? " in " + venueLabel(x.m.g) : ""))
+    };
+    return await askClaudeText("Write a WhatsApp message (under 200 words, plain text, no markdown) in the voice of a stereotypical traditional British football commentator: breathless, cliche-laden, warm. It is for a family World Cup sweepstake where each person owns teams. Cover: (1) yesterday's results with drama, crediting the family owners; (2) the state of the sweepstake table; (3) confident tongue-in-cheek predictions for today's fixtures. Data: " + JSON.stringify(data));
+  }catch(_){
+    return localCommentary(results, scores, prevRows, currRows, todays);
+  }
+}
+
 /* ---------- UI wiring ---------- */
 const statusEl = document.getElementById("status");
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
-const btns = [document.getElementById("btnYesterday"), document.getElementById("btnToday"), document.getElementById("btnTomorrow"), document.getElementById("btnLeaderboard")];
+const btns = [document.getElementById("btnYesterday"), document.getElementById("btnToday"), document.getElementById("btnTomorrow"), document.getElementById("btnLeaderboard"), document.getElementById("btnCommentary")];
 const setStatus = s => statusEl.textContent = s;
 
 async function generate(kind){
@@ -441,6 +603,8 @@ async function generate(kind){
     if(kind === "yesterday"){
       const target = new Date(now.getTime() - 24*3600*1000);
       msg = await buildResultsMsg(matches, live, ukDateStr(target), ukNiceDate(target), setStatus);
+    } else if(kind === "commentary"){
+      msg = await buildCommentaryMsg(matches, setStatus);
     } else if(kind === "leaderboard"){
       const {finished, scores} = await gatherAllScores(matches, setStatus);
       msg = buildLeaderboardMsg(finished, scores, ukNiceDate(now));
@@ -470,6 +634,7 @@ btns[0].addEventListener("click", () => generate("yesterday"));
 btns[1].addEventListener("click", () => generate("today"));
 btns[2].addEventListener("click", () => generate("tomorrow"));
 btns[3].addEventListener("click", () => generate("leaderboard"));
+btns[4].addEventListener("click", () => generate("commentary"));
 
 document.getElementById("btnCopy").addEventListener("click", async () => {
   const text = msgEl.textContent;
