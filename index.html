@@ -184,7 +184,13 @@ async function loadMatches(){
       d: m.date, t: m.time,
       a: typeof m.team1 === "object" ? m.team1.name : m.team1,
       b: typeof m.team2 === "object" ? m.team2.name : m.team2,
-      s: (m.score && m.score.ft) ? m.score.ft : undefined,
+      s: (function(sc){
+        if(!sc || !(sc.ft || sc.et)) return undefined;
+        let v = (sc.et || sc.ft).slice();
+        if(sc.ps) v = v.concat(sc.ps);
+        else if(sc.et) v.push("aet");
+        return v;
+      })(m.score),
       g: m.ground
     }));
     return {matches: norm, live: true};
@@ -246,7 +252,7 @@ async function fetchScoresViaClaude(fixtures, niceDay){
   const list = fixtures.map(f => f.a + " v " + f.b).join("; ");
   return askClaude("Search the web for the final scores of these FIFA World Cup 2026 matches played on " + niceDay + " 2026: " + list +
     ". Respond with ONLY a JSON array, no markdown fences, no other text. One object per match, using EXACTLY the team names I gave you: " +
-    '[{"team1":"...","team2":"...","ft":[homeGoals,awayGoals]}]. If a final score cannot be confirmed, use null for ft.');
+    '[{"team1":"...","team2":"...","ft":[goalsIncExtraTime,goals],"aet":false,"pens":null}]. Set aet true if decided in extra time; set pens to [a,b] if a penalty shootout happened. If a final score cannot be confirmed, use null for ft.');
 }
 
 /* ---------- UK TV channel lookup ---------- */
@@ -313,7 +319,7 @@ async function buildResultsMsg(matches, live, targetDay, niceDay, setStatus){
     setStatus("Looking up " + missing.length + " score(s) via Claude web search\u2026");
     try{
       const found = await fetchScoresViaClaude(missing, niceDay);
-      found.forEach(f => { if(f.ft) scores[f.team1 + "|" + f.team2] = f.ft; });
+      found.forEach(f => { if(f.ft) scores[f.team1 + "|" + f.team2] = f.pens ? f.ft.concat(f.pens) : (f.aet ? f.ft.concat(["aet"]) : f.ft); });
     }catch(_){ /* fall through; unscored matches will say so */ }
   }
 
@@ -321,12 +327,15 @@ async function buildResultsMsg(matches, live, targetDay, niceDay, setStatus){
     const s = scores[m.a + "|" + m.b];
     const note = playerNote(m.a, m.b);
     const head = s
-      ? teamLabel(m.a) + " " + s[0] + "\u2013" + s[1] + " " + teamLabel(m.b)
+      ? teamLabel(m.a) + " " + s[0] + "\u2013" + s[1] + " " + teamLabel(m.b) + scoreSuffix(s)
       : teamLabel(m.a) + " v " + teamLabel(m.b) + " \u2014 result not confirmed yet";
     return note ? head + "\n" + note : head;
   });
   return "\u26bd WORLD CUP 2026 \u2014 RESULTS\n" + niceDay + "\n\n" + lines.join("\n\n");
 }
+
+/* Score arrays: [a,b] = 90 mins; [a,b,"aet"] = extra time; [a,b,pa,pb] = pens decided */
+const scoreSuffix = s => s.length === 4 ? " (" + s[2] + "\u2013" + s[3] + " pens)" : (s[2] === "aet" ? " aet" : "");
 
 /* ---------- Leaderboard ---------- */
 const mKey = m => m.a + "|" + m.b + "|" + m.d;
@@ -362,7 +371,7 @@ async function gatherAllScores(matches, setStatus){
         const found = await fetchScoresViaClaude(batch, day);
         found.forEach(f => {
           const m = batch.find(x => x.a === f.team1 && x.b === f.team2);
-          if(m && f.ft) scores[mKey(m)] = f.ft;
+          if(m && f.ft) scores[mKey(m)] = f.pens ? f.ft.concat(f.pens) : (f.aet ? f.ft.concat(["aet"]) : f.ft);
         });
       }catch(_){ /* leave missing; they just won't count yet */ }
     }
@@ -379,12 +388,16 @@ function buildLeaderboardMsg(finished, scores, niceDay){
     const s = scores[mKey(m)];
     if(!s){ pending++; return; }
     counted++;
-    [[m.a, s[0], s[1]], [m.b, s[1], s[0]]].forEach(([team, gf, ga]) => {
+    const pens = s.length === 4 ? [s[2], s[3]] : null;
+    [[m.a, s[0], s[1], pens ? pens[0] - pens[1] : 0], [m.b, s[1], s[0], pens ? pens[1] - pens[0] : 0]].forEach(([team, gf, ga, pdiff]) => {
       const p = TEAM_TO_PLAYER[team];
       if(!p) return;
       const r = table[p];
       r.P++; r.GF += gf; r.GA += ga;
-      if(gf > ga) r.W++; else if(gf === ga) r.D++; else r.L++;
+      if(gf > ga) r.W++;
+      else if(gf < ga) r.L++;
+      else if(pens){ if(pdiff > 0) r.W++; else r.L++; }
+      else r.D++;
     });
   });
   if(counted === 0) return "\u26bd WORLD CUP 2026 \u2014 LEADERBOARD\n\nNo completed matches yet \u2014 check back after the first results!";
