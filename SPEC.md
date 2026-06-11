@@ -170,3 +170,11 @@ Fourth button: **"Tomorrow's matches"** — identical format to today's fixtures
 
 ## Change log (cont.)
 - v1.2 — Added Tomorrow's matches button; published.
+
+## Commentary (v1.3)
+Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditional British football commentator covering (1) yesterday's results with dramatic colour crediting team owners, (2) the state of the sweepstake table (leader, biggest overnight climber, sympathy for the bottom), and (3) tongue-in-cheek predictions for today's fixtures.
+- Two-tier generation: where the Anthropic API is reachable (claude.ai artifact), Claude writes bespoke commentary from a structured data payload (results, top 5, fixtures; <200 words). Everywhere else (the GitHub Pages site, mobile app), a built-in phrase-bank engine assembles commentary locally — randomised cliché selection varies the output day to day; tone scales with margin of victory (odd-goal thriller → demolition), shootouts get maximum drama.
+- Standings logic refactored into tallyTable()/computeRows(), shared by leaderboard and commentary (which diffs the table before/after yesterday to find movers). Leaderboard regression-tested.
+
+## Change log (cont.)
+- v1.3 — Commentary button: Claude-written where possible, local cliché engine everywhere; published.
