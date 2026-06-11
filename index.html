@@ -76,6 +76,7 @@
   <div class="btn-row">
     <button class="gen" id="btnYesterday">Yesterday's results<small>scores + who had each team</small></button>
     <button class="gen" id="btnToday">Today's matches<small>kick-offs in UK time</small></button>
+    <button class="gen" id="btnTomorrow">Tomorrow's matches<small>plan ahead — UK times</small></button>
     <button class="gen" id="btnLeaderboard">Leaderboard<small>played, W-D-L, goal difference</small></button>
   </div>
   <div class="status" id="status"></div>
@@ -265,13 +266,14 @@ async function fetchChannelsViaClaude(fixtures, niceDay){
 
 
 /* ---------- Message builders ---------- */
-async function buildFixturesMsg(matches, targetDay, niceDay, setStatus){
+async function buildFixturesMsg(matches, targetDay, niceDay, setStatus, label){
+  label = label || "TODAY";
   buildFixturesMsg.tvError = null;
   const todays = matches
     .map(m => ({m, ko: kickoffUTC(m)}))
     .filter(x => x.ko && ukDateStr(x.ko) === targetDay)
     .sort((a,b) => a.ko - b.ko);
-  if(todays.length === 0) return "\u26bd WORLD CUP 2026 \u2014 " + niceDay + "\n\nNo matches today. Rest those nerves!";
+  if(todays.length === 0) return "\u26bd WORLD CUP 2026 \u2014 " + niceDay + "\n\nNo matches " + label.toLowerCase() + ". Rest those nerves!";
 
   /* UK TV channels: embedded schedule first, then cache, then Claude web search */
   const tv = await cacheGet("wc26-tv");
@@ -301,7 +303,7 @@ async function buildFixturesMsg(matches, targetDay, niceDay, setStatus){
     const sub = [note, v ? "\ud83d\udccd " + v : ""].filter(Boolean).join(" \u00b7 ");
     return sub ? head + "\n" + sub : head;
   });
-  return "\u26bd WORLD CUP 2026 \u2014 TODAY'S MATCHES\n" + niceDay + " (all times UK)\n\n" + lines.join("\n\n");
+  return "\u26bd WORLD CUP 2026 \u2014 " + label + "'S MATCHES\n" + niceDay + " (all times UK)\n\n" + lines.join("\n\n");
 }
 
 async function buildResultsMsg(matches, live, targetDay, niceDay, setStatus){
@@ -425,7 +427,7 @@ function buildLeaderboardMsg(finished, scores, niceDay){
 const statusEl = document.getElementById("status");
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
-const btns = [document.getElementById("btnYesterday"), document.getElementById("btnToday"), document.getElementById("btnLeaderboard")];
+const btns = [document.getElementById("btnYesterday"), document.getElementById("btnToday"), document.getElementById("btnTomorrow"), document.getElementById("btnLeaderboard")];
 const setStatus = s => statusEl.textContent = s;
 
 async function generate(kind){
@@ -442,13 +444,16 @@ async function generate(kind){
     } else if(kind === "leaderboard"){
       const {finished, scores} = await gatherAllScores(matches, setStatus);
       msg = buildLeaderboardMsg(finished, scores, ukNiceDate(now));
+    } else if(kind === "tomorrow"){
+      const target = new Date(now.getTime() + 24*3600*1000);
+      msg = await buildFixturesMsg(matches, ukDateStr(target), ukNiceDate(target), setStatus, "TOMORROW");
     } else {
-      msg = await buildFixturesMsg(matches, ukDateStr(now), ukNiceDate(now), setStatus);
+      msg = await buildFixturesMsg(matches, ukDateStr(now), ukNiceDate(now), setStatus, "TODAY");
     }
     msgEl.textContent = msg;
     chatEl.classList.add("show");
     let note = "Ready \u2014 copy it into the family chat.";
-    if(kind === "today" && buildFixturesMsg.tvError){
+    if((kind === "today" || kind === "tomorrow") && buildFixturesMsg.tvError){
       note += " TV channels unavailable \u2014 " + String(buildFixturesMsg.tvError).slice(0,220);
     } else if(askClaude.mode === "no web search (limited)"){
       note += " (This environment blocked web search \u2014 lookups ran on Claude's built-in knowledge, so some channels/scores may be missing.)";
@@ -463,7 +468,8 @@ async function generate(kind){
 
 btns[0].addEventListener("click", () => generate("yesterday"));
 btns[1].addEventListener("click", () => generate("today"));
-btns[2].addEventListener("click", () => generate("leaderboard"));
+btns[2].addEventListener("click", () => generate("tomorrow"));
+btns[3].addEventListener("click", () => generate("leaderboard"));
 
 document.getElementById("btnCopy").addEventListener("click", async () => {
   const text = msgEl.textContent;
