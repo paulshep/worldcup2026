@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family World Cup Sweepstake 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;600;700&display=swap');
+  :root{
+    --pitch:#0A3526; --pitch-line:#1C5A40; --cream:#FBF6EA; --ink:#16241D;
+    --gold:#D9A93C; --bubble:#D9FDD3; --bubble-ink:#0B1F14; --muted:#6E7A72;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Archivo',system-ui,sans-serif;
+    background:repeating-linear-gradient(90deg, transparent 0 88px, rgba(255,255,255,.035) 88px 176px),var(--pitch);
+    color:var(--cream); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+    padding:28px 16px 48px;
+  }
+  header{text-align:center; margin-bottom:26px; max-width:560px}
+  .crest{display:inline-block; border:2px solid var(--gold); border-radius:999px;
+    padding:4px 14px; font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--gold); margin-bottom:14px;}
+  h1{font-family:'Archivo Black',sans-serif; font-size:clamp(28px,7vw,44px);
+    line-height:1.02; text-transform:uppercase;}
+  h1 .y{color:var(--gold)}
+  header p{margin-top:10px; font-size:14px; color:#BFD3C7}
+  .card{background:var(--cream); color:var(--ink); width:100%; max-width:560px;
+    border-radius:14px; box-shadow:0 14px 40px rgba(0,0,0,.35); padding:22px 20px 26px;}
+  .btn-row{display:flex; gap:12px; flex-wrap:wrap}
+  button.gen{flex:1 1 200px; font-family:'Archivo Black',sans-serif; font-size:15px;
+    text-transform:uppercase; letter-spacing:.05em; padding:16px 12px; border-radius:10px;
+    border:none; cursor:pointer; background:var(--pitch); color:var(--cream);
+    transition:transform .08s ease, background .15s ease;}
+  button.gen:hover{background:var(--pitch-line)}
+  button.gen:active{transform:scale(.98)}
+  button.gen:disabled{opacity:.55; cursor:wait}
+  button.gen:focus-visible,.copy:focus-visible,.roster summary:focus-visible{outline:3px solid var(--gold); outline-offset:2px;}
+  button.gen small{display:block; font-family:'Archivo',sans-serif; font-weight:600;
+    font-size:11px; text-transform:none; letter-spacing:0; opacity:.75; margin-top:4px}
+  .status{margin-top:16px; font-size:13px; color:var(--muted); min-height:18px}
+  .chat{margin-top:14px; padding:18px 14px 8px; background:#E7DFD2; border-radius:10px; display:none;}
+  .chat.show{display:block}
+  .bubble{position:relative; background:var(--bubble); color:var(--bubble-ink);
+    border-radius:10px; border-top-left-radius:2px; padding:12px 14px 10px;
+    white-space:pre-wrap; font-size:14.5px; line-height:1.5;
+    box-shadow:0 1px 1px rgba(0,0,0,.12); word-wrap:break-word;}
+  .bubble .tick{display:block; text-align:right; font-size:11px; color:#5BA08B; margin-top:6px;}
+  .copy{margin:12px auto 8px; display:block; font-family:'Archivo',sans-serif;
+    font-weight:700; font-size:13px; padding:10px 22px; border-radius:999px;
+    border:2px solid var(--pitch); background:transparent; color:var(--pitch);
+    cursor:pointer; transition:background .15s ease, color .15s ease;}
+  .copy:hover{background:var(--pitch); color:var(--cream)}
+  .roster{margin-top:22px; border-top:2px dashed #D8CDB8; padding-top:14px}
+  .roster summary{cursor:pointer; font-weight:700; font-size:13px; text-transform:uppercase;
+    letter-spacing:.08em; color:var(--pitch); list-style:none;}
+  .roster summary::before{content:'\25B8 '}
+  .roster[open] summary::before{content:'\25BE '}
+  .roster table{width:100%; margin-top:10px; border-collapse:collapse; font-size:13.5px}
+  .roster td{padding:5px 4px; border-bottom:1px solid #EDE5D4}
+  .roster td:first-child{font-weight:700; white-space:nowrap}
+  footer{margin-top:22px; font-size:11px; color:#7FA290; text-align:center; max-width:560px}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crest">USA &middot; Mexico &middot; Canada 2026</div>
+  <h1>Family <span class="y">Sweepstake</span><br>Message Maker</h1>
+  <p>One tap, one message, straight to the family chat.</p>
+</header>
+
+<main class="card">
+  <div class="btn-row">
+    <button class="gen" id="btnYesterday">Yesterday's results<small>scores + who had each team</small></button>
+    <button class="gen" id="btnToday">Today's matches<small>kick-offs in UK time</small></button>
+    <button class="gen" id="btnLeaderboard">Leaderboard<small>played, W-D-L, goal difference</small></button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <div class="chat" id="chat">
+    <div class="bubble"><span id="msg"></span><span class="tick">12:00 &#10003;&#10003;</span></div>
+    <button class="copy" id="btnCopy">Copy message</button>
+  </div>
+
+  <details class="roster">
+    <summary>The draw &mdash; 24 players, 48 teams</summary>
+    <table id="rosterTable"></table>
+  </details>
+</main>
+
+<footer>Full fixture list built in. Scores fetched live (direct or via Claude web search). Times in UK time (BST).</footer>
+
+<script>
+/* ---------- Hard-coded full fixture schedule (104 matches, snapshot 2026-06-11) ---------- */
+const EMBEDDED_MATCHES = [{"d":"2026-06-11","t":"13:00 UTC-6","a":"Mexico","b":"South Africa","g":"Mexico City"},{"d":"2026-06-11","t":"20:00 UTC-6","a":"South Korea","b":"Czech Republic","g":"Guadalajara (Zapopan)"},{"d":"2026-06-18","t":"12:00 UTC-4","a":"Czech Republic","b":"South Africa","g":"Atlanta"},{"d":"2026-06-18","t":"19:00 UTC-6","a":"Mexico","b":"South Korea","g":"Guadalajara (Zapopan)"},{"d":"2026-06-24","t":"19:00 UTC-6","a":"Czech Republic","b":"Mexico","g":"Mexico City"},{"d":"2026-06-24","t":"19:00 UTC-6","a":"South Africa","b":"South Korea","g":"Monterrey (Guadalupe)"},{"d":"2026-06-12","t":"15:00 UTC-4","a":"Canada","b":"Bosnia & Herzegovina","g":"Toronto"},{"d":"2026-06-13","t":"12:00 UTC-7","a":"Qatar","b":"Switzerland","g":"San Francisco Bay Area (Santa Clara)"},{"d":"2026-06-18","t":"12:00 UTC-7","a":"Switzerland","b":"Bosnia & Herzegovina","g":"Los Angeles (Inglewood)"},{"d":"2026-06-18","t":"15:00 UTC-7","a":"Canada","b":"Qatar","g":"Vancouver"},{"d":"2026-06-24","t":"12:00 UTC-7","a":"Switzerland","b":"Canada","g":"Vancouver"},{"d":"2026-06-24","t":"12:00 UTC-7","a":"Bosnia & Herzegovina","b":"Qatar","g":"Seattle"},{"d":"2026-06-13","t":"18:00 UTC-4","a":"Brazil","b":"Morocco","g":"New York/New Jersey (East Rutherford)"},{"d":"2026-06-13","t":"21:00 UTC-4","a":"Haiti","b":"Scotland","g":"Boston (Foxborough)"},{"d":"2026-06-19","t":"18:00 UTC-4","a":"Scotland","b":"Morocco","g":"Boston (Foxborough)"},{"d":"2026-06-19","t":"20:30 UTC-4","a":"Brazil","b":"Haiti","g":"Philadelphia"},{"d":"2026-06-24","t":"18:00 UTC-4","a":"Scotland","b":"Brazil","g":"Miami (Miami Gardens)"},{"d":"2026-06-24","t":"18:00 UTC-4","a":"Morocco","b":"Haiti","g":"Atlanta"},{"d":"2026-06-12","t":"18:00 UTC-7","a":"USA","b":"Paraguay","g":"Los Angeles (Inglewood)"},{"d":"2026-06-13","t":"21:00 UTC-7","a":"Australia","b":"Turkey","g":"Vancouver"},{"d":"2026-06-19","t":"12:00 UTC-7","a":"USA","b":"Australia","g":"Seattle"},{"d":"2026-06-19","t":"20:00 UTC-7","a":"Turkey","b":"Paraguay","g":"San Francisco Bay Area (Santa Clara)"},{"d":"2026-06-25","t":"19:00 UTC-7","a":"Turkey","b":"USA","g":"Los Angeles (Inglewood)"},{"d":"2026-06-25","t":"19:00 UTC-7","a":"Paraguay","b":"Australia","g":"San Francisco Bay Area (Santa Clara)"},{"d":"2026-06-14","t":"12:00 UTC-5","a":"Germany","b":"Curaçao","g":"Houston"},{"d":"2026-06-14","t":"19:00 UTC-4","a":"Ivory Coast","b":"Ecuador","g":"Philadelphia"},{"d":"2026-06-20","t":"16:00 UTC-4","a":"Germany","b":"Ivory Coast","g":"Toronto"},{"d":"2026-06-20","t":"19:00 UTC-5","a":"Ecuador","b":"Curaçao","g":"Kansas City"},{"d":"2026-06-25","t":"16:00 UTC-4","a":"Curaçao","b":"Ivory Coast","g":"Philadelphia"},{"d":"2026-06-25","t":"16:00 UTC-4","a":"Ecuador","b":"Germany","g":"New York/New Jersey (East Rutherford)"},{"d":"2026-06-14","t":"15:00 UTC-5","a":"Netherlands","b":"Japan","g":"Dallas (Arlington)"},{"d":"2026-06-14","t":"20:00 UTC-6","a":"Sweden","b":"Tunisia","g":"Monterrey (Guadalupe)"},{"d":"2026-06-20","t":"12:00 UTC-5","a":"Netherlands","b":"Sweden","g":"Houston"},{"d":"2026-06-20","t":"22:00 UTC-6","a":"Tunisia","b":"Japan","g":"Monterrey (Guadalupe)"},{"d":"2026-06-25","t":"18:00 UTC-5","a":"Japan","b":"Sweden","g":"Dallas (Arlington)"},{"d":"2026-06-25","t":"18:00 UTC-5","a":"Tunisia","b":"Netherlands","g":"Kansas City"},{"d":"2026-06-15","t":"12:00 UTC-7","a":"Belgium","b":"Egypt","g":"Seattle"},{"d":"2026-06-15","t":"18:00 UTC-7","a":"Iran","b":"New Zealand","g":"Los Angeles (Inglewood)"},{"d":"2026-06-21","t":"12:00 UTC-7","a":"Belgium","b":"Iran","g":"Los Angeles (Inglewood)"},{"d":"2026-06-21","t":"18:00 UTC-7","a":"New Zealand","b":"Egypt","g":"Vancouver"},{"d":"2026-06-26","t":"20:00 UTC-7","a":"Egypt","b":"Iran","g":"Seattle"},{"d":"2026-06-26","t":"20:00 UTC-7","a":"New Zealand","b":"Belgium","g":"Vancouver"},{"d":"2026-06-15","t":"12:00 UTC-4","a":"Spain","b":"Cape Verde","g":"Atlanta"},{"d":"2026-06-15","t":"18:00 UTC-4","a":"Saudi Arabia","b":"Uruguay","g":"Miami (Miami Gardens)"},{"d":"2026-06-21","t":"12:00 UTC-4","a":"Spain","b":"Saudi Arabia","g":"Atlanta"},{"d":"2026-06-21","t":"18:00 UTC-4","a":"Uruguay","b":"Cape Verde","g":"Miami (Miami Gardens)"},{"d":"2026-06-26","t":"19:00 UTC-5","a":"Cape Verde","b":"Saudi Arabia","g":"Houston"},{"d":"2026-06-26","t":"18:00 UTC-6","a":"Uruguay","b":"Spain","g":"Guadalajara (Zapopan)"},{"d":"2026-06-16","t":"15:00 UTC-4","a":"France","b":"Senegal","g":"New York/New Jersey (East Rutherford)"},{"d":"2026-06-16","t":"18:00 UTC-4","a":"Iraq","b":"Norway","g":"Boston (Foxborough)"},{"d":"2026-06-22","t":"17:00 UTC-4","a":"France","b":"Iraq","g":"Philadelphia"},{"d":"2026-06-22","t":"20:00 UTC-4","a":"Norway","b":"Senegal","g":"New York/New Jersey (East Rutherford)"},{"d":"2026-06-26","t":"15:00 UTC-4","a":"Norway","b":"France","g":"Boston (Foxborough)"},{"d":"2026-06-26","t":"15:00 UTC-4","a":"Senegal","b":"Iraq","g":"Toronto"},{"d":"2026-06-16","t":"20:00 UTC-5","a":"Argentina","b":"Algeria","g":"Kansas City"},{"d":"2026-06-16","t":"21:00 UTC-7","a":"Austria","b":"Jordan","g":"San Francisco Bay Area (Santa Clara)"},{"d":"2026-06-22","t":"12:00 UTC-5","a":"Argentina","b":"Austria","g":"Dallas (Arlington)"},{"d":"2026-06-22","t":"20:00 UTC-7","a":"Jordan","b":"Algeria","g":"San Francisco Bay Area (Santa Clara)"},{"d":"2026-06-27","t":"21:00 UTC-5","a":"Algeria","b":"Austria","g":"Kansas City"},{"d":"2026-06-27","t":"21:00 UTC-5","a":"Jordan","b":"Argentina","g":"Dallas (Arlington)"},{"d":"2026-06-17","t":"12:00 UTC-5","a":"Portugal","b":"DR Congo","g":"Houston"},{"d":"2026-06-17","t":"20:00 UTC-6","a":"Uzbekistan","b":"Colombia","g":"Mexico City"},{"d":"2026-06-23","t":"12:00 UTC-5","a":"Portugal","b":"Uzbekistan","g":"Houston"},{"d":"2026-06-23","t":"20:00 UTC-6","a":"Colombia","b":"DR Congo","g":"Guadalajara (Zapopan)"},{"d":"2026-06-27","t":"19:30 UTC-4","a":"Colombia","b":"Portugal","g":"Miami (Miami Gardens)"},{"d":"2026-06-27","t":"19:30 UTC-4","a":"DR Congo","b":"Uzbekistan","g":"Atlanta"},{"d":"2026-06-17","t":"15:00 UTC-5","a":"England","b":"Croatia","g":"Dallas (Arlington)"},{"d":"2026-06-17","t":"19:00 UTC-4","a":"Ghana","b":"Panama","g":"Toronto"},{"d":"2026-06-23","t":"16:00 UTC-4","a":"England","b":"Ghana","g":"Boston (Foxborough)"},{"d":"2026-06-23","t":"19:00 UTC-4","a":"Panama","b":"Croatia","g":"Toronto"},{"d":"2026-06-27","t":"17:00 UTC-4","a":"Panama","b":"England","g":"New York/New Jersey (East Rutherford)"},{"d":"2026-06-27","t":"17:00 UTC-4","a":"Croatia","b":"Ghana","g":"Philadelphia"},{"d":"2026-06-28","t":"12:00 UTC-7","a":"2A","b":"2B","g":"Los Angeles (Inglewood)"},{"d":"2026-06-29","t":"16:30 UTC-4","a":"1E","b":"3A/B/C/D/F","g":"Boston (Foxborough)"},{"d":"2026-06-29","t":"19:00 UTC-6","a":"1F","b":"2C","g":"Monterrey (Guadalupe)"},{"d":"2026-06-29","t":"12:00 UTC-5","a":"1C","b":"2F","g":"Houston"},{"d":"2026-06-30","t":"17:00 UTC-4","a":"1I","b":"3C/D/F/G/H","g":"New York/New Jersey (East Rutherford)"},{"d":"2026-06-30","t":"12:00 UTC-5","a":"2E","b":"2I","g":"Dallas (Arlington)"},{"d":"2026-06-30","t":"19:00 UTC-6","a":"1A","b":"3C/E/F/H/I","g":"Mexico City"},{"d":"2026-07-01","t":"12:00 UTC-4","a":"1L","b":"3E/H/I/J/K","g":"Atlanta"},{"d":"2026-07-01","t":"17:00 UTC-7","a":"1D","b":"3B/E/F/I/J","g":"San Francisco Bay Area (Santa Clara)"},{"d":"2026-07-01","t":"13:00 UTC-7","a":"1G","b":"3A/E/H/I/J","g":"Seattle"},{"d":"2026-07-02","t":"19:00 UTC-4","a":"2K","b":"2L","g":"Toronto"},{"d":"2026-07-02","t":"12:00 UTC-7","a":"1H","b":"2J","g":"Los Angeles (Inglewood)"},{"d":"2026-07-02","t":"20:00 UTC-7","a":"1B","b":"3E/F/G/I/J","g":"Vancouver"},{"d":"2026-07-03","t":"18:00 UTC-4","a":"1J","b":"2H","g":"Miami (Miami Gardens)"},{"d":"2026-07-03","t":"20:30 UTC-5","a":"1K","b":"3D/E/I/J/L","g":"Kansas City"},{"d":"2026-07-03","t":"13:00 UTC-5","a":"2D","b":"2G","g":"Dallas (Arlington)"},{"d":"2026-07-04","t":"17:00 UTC-4","a":"W74","b":"W77","g":"Philadelphia"},{"d":"2026-07-04","t":"12:00 UTC-5","a":"W73","b":"W75","g":"Houston"},{"d":"2026-07-05","t":"16:00 UTC-4","a":"W76","b":"W78","g":"New York/New Jersey (East Rutherford)"},{"d":"2026-07-05","t":"18:00 UTC-6","a":"W79","b":"W80","g":"Mexico City"},{"d":"2026-07-06","t":"14:00 UTC-5","a":"W83","b":"W84","g":"Dallas (Arlington)"},{"d":"2026-07-06","t":"17:00 UTC-7","a":"W81","b":"W82","g":"Seattle"},{"d":"2026-07-07","t":"12:00 UTC-4","a":"W86","b":"W88","g":"Atlanta"},{"d":"2026-07-07","t":"13:00 UTC-7","a":"W85","b":"W87","g":"Vancouver"},{"d":"2026-07-09","t":"16:00 UTC-4","a":"W89","b":"W90","g":"Boston (Foxborough)"},{"d":"2026-07-10","t":"12:00 UTC-7","a":"W93","b":"W94","g":"Los Angeles (Inglewood)"},{"d":"2026-07-11","t":"17:00 UTC-4","a":"W91","b":"W92","g":"Miami (Miami Gardens)"},{"d":"2026-07-11","t":"20:00 UTC-5","a":"W95","b":"W96","g":"Kansas City"},{"d":"2026-07-14","t":"14:00 UTC-5","a":"W97","b":"W98","g":"Dallas (Arlington)"},{"d":"2026-07-15","t":"15:00 UTC-4","a":"W99","b":"W100","g":"Atlanta"},{"d":"2026-07-18","t":"17:00 UTC-4","a":"L101","b":"L102","g":"Miami (Miami Gardens)"},{"d":"2026-07-19","t":"15:00 UTC-4","a":"W101","b":"W102","g":"New York/New Jersey (East Rutherford)"}];
+
+const EMBEDDED_CHANNELS = {"Mexico|South Africa":"ITV1","South Korea|Czech Republic":"ITV","Canada|Bosnia & Herzegovina":"BBC","USA|Paraguay":"BBC","Qatar|Switzerland":"ITV","Brazil|Morocco":"BBC","Haiti|Scotland":"BBC","Australia|Turkey":"ITV","Germany|Curaçao":"ITV","Netherlands|Japan":"ITV","Ivory Coast|Ecuador":"BBC","Sweden|Tunisia":"ITV","Spain|Cape Verde":"ITV","Belgium|Egypt":"BBC","Saudi Arabia|Uruguay":"ITV","Iran|New Zealand":"BBC","France|Senegal":"BBC","Iraq|Norway":"BBC","Argentina|Algeria":"ITV","Austria|Jordan":"BBC","Portugal|DR Congo":"BBC","England|Croatia":"ITV1","Ghana|Panama":"ITV","Uzbekistan|Colombia":"BBC","Czech Republic|South Africa":"BBC","Switzerland|Bosnia & Herzegovina":"ITV","Canada|Qatar":"ITV","Mexico|South Korea":"BBC","USA|Australia":"BBC","Scotland|Morocco":"ITV1","Brazil|Haiti":"ITV","Turkey|Paraguay":"ITV","Netherlands|Sweden":"BBC","Germany|Ivory Coast":"ITV","Ecuador|Curaçao":"BBC","Tunisia|Japan":"BBC","Spain|Saudi Arabia":"BBC","Belgium|Iran":"ITV","Uruguay|Cape Verde":"BBC","New Zealand|Egypt":"ITV","Argentina|Austria":"BBC","France|Iraq":"BBC","Norway|Senegal":"ITV","Jordan|Algeria":"ITV","Portugal|Uzbekistan":"ITV","England|Ghana":"BBC One","Panama|Croatia":"BBC","Colombia|DR Congo":"ITV","Bosnia & Herzegovina|Qatar":"ITV","Switzerland|Canada":"ITV","Morocco|Haiti":"BBC","Scotland|Brazil":"BBC","Czech Republic|Mexico":"BBC","South Africa|South Korea":"BBC","Curaçao|Ivory Coast":"BBC","Ecuador|Germany":"BBC","Japan|Sweden":"BBC","Tunisia|Netherlands":"BBC","Paraguay|Australia":"ITV","Turkey|USA":"ITV","Norway|France":"ITV","Senegal|Iraq":"ITV","Cape Verde|Saudi Arabia":"ITV","Uruguay|Spain":"ITV","Egypt|Iran":"BBC","New Zealand|Belgium":"BBC","Croatia|Ghana":"ITV","Panama|England":"ITV1","Colombia|Portugal":"BBC","DR Congo|Uzbekistan":"BBC","Algeria|Austria":"BBC","Jordan|Argentina":"BBC"};
+
+/* ---------- Hard-coded sweepstake draw (validated v. official 48) ---------- */
+const PLAYERS = [
+  ["Ali", ["Iran","Japan"]],
+  ["Carlotta", ["Cape Verde","South Africa"]],
+  ["Dan", ["Bosnia & Herzegovina","Argentina"]],
+  ["Elliot", ["Algeria","France"]],
+  ["Euan", ["Australia","Colombia"]],
+  ["George", ["Netherlands","Ecuador"]],
+  ["Hannah", ["Jordan","Germany"]],
+  ["Jack", ["Cura\u00e7ao","Saudi Arabia"]],
+  ["Jan", ["Belgium","Spain"]],
+  ["Joseph", ["Tunisia","Sweden"]],
+  ["Josh", ["Uruguay","Iraq"]],
+  ["Jonathan", ["Ivory Coast","Switzerland"]],
+  ["Jenny", ["Croatia","Egypt"]],
+  ["Kate", ["USA","Qatar"]],
+  ["Katie", ["Paraguay","Morocco"]],
+  ["Laura", ["Uzbekistan","Czech Republic"]],
+  ["Lou", ["Mexico","Brazil"]],
+  ["Matt", ["Ghana","Haiti"]],
+  ["Mike", ["New Zealand","Scotland"]],
+  ["Nick", ["England","South Korea"]],
+  ["Patrick", ["Norway","Senegal"]],
+  ["Paul", ["Portugal","Turkey"]],
+  ["Sophie", ["Panama","Austria"]],
+  ["Vic", ["Canada","DR Congo"]]
+];
+const TEAM_TO_PLAYER = {};
+PLAYERS.forEach(([p, teams]) => teams.forEach(t => TEAM_TO_PLAYER[t] = p));
+
+const FLAGS = {
+  "Algeria":"\ud83c\udde9\ud83c\uddff","Argentina":"\ud83c\udde6\ud83c\uddf7","Australia":"\ud83c\udde6\ud83c\uddfa","Austria":"\ud83c\udde6\ud83c\uddf9","Belgium":"\ud83c\udde7\ud83c\uddea",
+  "Bosnia & Herzegovina":"\ud83c\udde7\ud83c\udde6","Brazil":"\ud83c\udde7\ud83c\uddf7","Canada":"\ud83c\udde8\ud83c\udde6","Cape Verde":"\ud83c\udde8\ud83c\uddfb",
+  "Colombia":"\ud83c\udde8\ud83c\uddf4","Croatia":"\ud83c\udded\ud83c\uddf7","Cura\u00e7ao":"\ud83c\udde8\ud83c\uddfc","Czech Republic":"\ud83c\udde8\ud83c\uddff",
+  "DR Congo":"\ud83c\udde8\ud83c\udde9","Ecuador":"\ud83c\uddea\ud83c\udde8","Egypt":"\ud83c\uddea\ud83c\uddec","England":"\ud83c\udff4\udb40\udc67\udb40\udc62\udb40\udc65\udb40\udc6e\udb40\udc67\udb40\udc7f","France":"\ud83c\uddeb\ud83c\uddf7",
+  "Germany":"\ud83c\udde9\ud83c\uddea","Ghana":"\ud83c\uddec\ud83c\udded","Haiti":"\ud83c\udded\ud83c\uddf9","Iran":"\ud83c\uddee\ud83c\uddf7","Iraq":"\ud83c\uddee\ud83c\uddf6",
+  "Ivory Coast":"\ud83c\udde8\ud83c\uddee","Japan":"\ud83c\uddef\ud83c\uddf5","Jordan":"\ud83c\uddef\ud83c\uddf4","Mexico":"\ud83c\uddf2\ud83c\uddfd","Morocco":"\ud83c\uddf2\ud83c\udde6",
+  "Netherlands":"\ud83c\uddf3\ud83c\uddf1","New Zealand":"\ud83c\uddf3\ud83c\uddff","Norway":"\ud83c\uddf3\ud83c\uddf4","Panama":"\ud83c\uddf5\ud83c\udde6",
+  "Paraguay":"\ud83c\uddf5\ud83c\uddfe","Portugal":"\ud83c\uddf5\ud83c\uddf9","Qatar":"\ud83c\uddf6\ud83c\udde6","Saudi Arabia":"\ud83c\uddf8\ud83c\udde6",
+  "Scotland":"\ud83c\udff4\udb40\udc67\udb40\udc62\udb40\udc73\udb40\udc63\udb40\udc74\udb40\udc7f","Senegal":"\ud83c\uddf8\ud83c\uddf3","South Africa":"\ud83c\uddff\ud83c\udde6","South Korea":"\ud83c\uddf0\ud83c\uddf7",
+  "Spain":"\ud83c\uddea\ud83c\uddf8","Sweden":"\ud83c\uddf8\ud83c\uddea","Switzerland":"\ud83c\udde8\ud83c\udded","Tunisia":"\ud83c\uddf9\ud83c\uddf3","Turkey":"\ud83c\uddf9\ud83c\uddf7",
+  "USA":"\ud83c\uddfa\ud83c\uddf8","Uruguay":"\ud83c\uddfa\ud83c\uddfe","Uzbekistan":"\ud83c\uddfa\ud83c\uddff"
+};
+
+const DATA_URL = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json";
+
+/* ---------- Date helpers (anchored to UK time) ---------- */
+function kickoffUTC(m){
+  if(!m.d) return null;
+  const [y,mo,d] = m.d.split("-").map(Number);
+  if(!m.t) return new Date(Date.UTC(y, mo-1, d, 12, 0));
+  const t = m.t.match(/(\d{1,2}):(\d{2})/);
+  const off = m.t.match(/UTC([+-])(\d{1,2})(?::(\d{2}))?/);
+  let h = t ? +t[1] : 12, min = t ? +t[2] : 0, offMin = 0;
+  if(off){ offMin = (+off[2])*60 + (off[3]?+off[3]:0); if(off[1]==="-") offMin = -offMin; }
+  return new Date(Date.UTC(y, mo-1, d, h, min) - offMin*60000);
+}
+const ukDateStr = d => new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(d);
+const ukTime = d => new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"numeric",minute:"2-digit",hour12:true}).format(d).replace(/\s/g,"");
+const ukNiceDate = d => new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"long",day:"numeric",month:"long"}).format(d);
+
+/* ---------- Formatting ---------- */
+const teamLabel = n => (FLAGS[n] ? FLAGS[n] + " " + n : n);
+const venueLabel = g => g ? g.replace(/\s*\(.*\)\s*$/, "") : "";
+function playerNote(t1, t2){
+  const p1 = TEAM_TO_PLAYER[t1], p2 = TEAM_TO_PLAYER[t2];
+  if(p1 && p2) return p1 === p2 ? "(both " + p1 + "!)" : "(" + p1 + " v " + p2 + ")";
+  if(p1) return "(" + p1 + "'s " + t1 + ")";
+  if(p2) return "(" + p2 + "'s " + t2 + ")";
+  return "";
+}
+
+/* ---------- Data: live fetch -> embedded fallback ---------- */
+async function loadMatches(){
+  try{
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 6000);
+    const r = await fetch(DATA_URL, {cache:"no-store", signal:ctl.signal});
+    clearTimeout(timer);
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const norm = (j.matches || []).map(m => ({
+      d: m.date, t: m.time,
+      a: typeof m.team1 === "object" ? m.team1.name : m.team1,
+      b: typeof m.team2 === "object" ? m.team2.name : m.team2,
+      s: (m.score && m.score.ft) ? m.score.ft : undefined,
+      g: m.ground
+    }));
+    return {matches: norm, live: true};
+  }catch(_){
+    return {matches: EMBEDDED_MATCHES, live: false};
+  }
+}
+
+/* ---------- Shared Claude + web-search JSON helper ---------- */
+async function askClaudeOnce(prompt, useTools){
+  const body = {
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1000,
+    messages: [{role:"user", content: prompt}]
+  };
+  if(useTools) body.tools = [{type:"web_search_20250305", name:"web_search"}];
+  let resp;
+  try{
+    resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body)
+    });
+  }catch(e){ throw new Error("network: " + e.message); }
+  const raw = await resp.text();
+  if(!resp.ok) throw new Error("HTTP " + resp.status + ": " + raw.slice(0,160));
+  let data;
+  try{ data = JSON.parse(raw); }catch(_){ throw new Error("non-JSON reply: " + raw.slice(0,160)); }
+  if(data.type === "error" || data.error) throw new Error("API error: " + JSON.stringify(data.error || data).slice(0,160));
+  const text = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("\n");
+  const clean = text.replace(/```json|```/g, "").trim();
+  const start = clean.indexOf("["), end = clean.lastIndexOf("]");
+  if(start === -1 || end === -1) throw new Error("no JSON array in reply: " + clean.slice(0,120));
+  try{ return JSON.parse(clean.slice(start, end + 1)); }
+  catch(e){ throw new Error("bad JSON in reply: " + clean.slice(start, start+120)); }
+}
+
+/* Try with web search first; if the environment rejects the request shape,
+   retry without tools so we can at least learn which variant this runtime allows. */
+async function askClaude(prompt){
+  try{
+    const r = await askClaudeOnce(prompt, true);
+    askClaude.mode = "web search";
+    return r;
+  }catch(e1){
+    if(!/network:|HTTP 4|Invalid response/i.test(e1.message)) throw e1;
+    try{
+      const r = await askClaudeOnce(prompt + " Do not guess: if you are not certain, use null.", false);
+      askClaude.mode = "no web search (limited)";
+      return r;
+    }catch(e2){
+      throw new Error("with web search: [" + e1.message.slice(0,90) + "] without: [" + e2.message.slice(0,90) + "]");
+    }
+  }
+}
+
+/* ---------- Score lookup ---------- */
+async function fetchScoresViaClaude(fixtures, niceDay){
+  const list = fixtures.map(f => f.a + " v " + f.b).join("; ");
+  return askClaude("Search the web for the final scores of these FIFA World Cup 2026 matches played on " + niceDay + " 2026: " + list +
+    ". Respond with ONLY a JSON array, no markdown fences, no other text. One object per match, using EXACTLY the team names I gave you: " +
+    '[{"team1":"...","team2":"...","ft":[homeGoals,awayGoals]}]. If a final score cannot be confirmed, use null for ft.');
+}
+
+/* ---------- UK TV channel lookup ---------- */
+async function fetchChannelsViaClaude(fixtures, niceDay){
+  const list = fixtures.map(f => f.a + " v " + f.b).join("; ");
+  return askClaude("Search the web for which UK television channel is broadcasting each of these FIFA World Cup 2026 matches live on " + niceDay + " 2026: " + list +
+    ". UK coverage is shared between BBC and ITV. Respond with ONLY a JSON array, no markdown fences, no other text, using EXACTLY the team names I gave you: " +
+    '[{"team1":"...","team2":"...","channel":"BBC One"}]. Use the specific channel name (e.g. BBC One, BBC Two, ITV1, ITV4). If unconfirmed, use null for channel.');
+}
+
+
+/* ---------- Message builders ---------- */
+async function buildFixturesMsg(matches, targetDay, niceDay, setStatus){
+  buildFixturesMsg.tvError = null;
+  const todays = matches
+    .map(m => ({m, ko: kickoffUTC(m)}))
+    .filter(x => x.ko && ukDateStr(x.ko) === targetDay)
+    .sort((a,b) => a.ko - b.ko);
+  if(todays.length === 0) return "\u26bd WORLD CUP 2026 \u2014 " + niceDay + "\n\nNo matches today. Rest those nerves!";
+
+  /* UK TV channels: embedded schedule first, then cache, then Claude web search */
+  const tv = await cacheGet("wc26-tv");
+  todays.forEach(x => {
+    const ch = EMBEDDED_CHANNELS[x.m.a + "|" + x.m.b] || EMBEDDED_CHANNELS[x.m.b + "|" + x.m.a];
+    if(ch) tv[mKey(x.m)] = ch;
+  });
+  const known = todays.filter(x => FLAGS[x.m.a] && FLAGS[x.m.b]);
+  const need = known.filter(x => !tv[mKey(x.m)]);
+  if(need.length > 0){
+    if(setStatus) setStatus("Checking UK TV channels\u2026");
+    try{
+      const found = await fetchChannelsViaClaude(need.map(x => x.m), niceDay);
+      found.forEach(f => {
+        const x = need.find(n => n.m.a === f.team1 && n.m.b === f.team2);
+        if(x && f.channel) tv[mKey(x.m)] = f.channel;
+      });
+      await cacheSet("wc26-tv", tv);
+    }catch(e){ buildFixturesMsg.tvError = e.message; }
+  }
+
+  const lines = todays.map(({m, ko}) => {
+    const note = playerNote(m.a, m.b);
+    const ch = tv[mKey(m)];
+    const head = ukTime(ko) + " BST \u2014 " + teamLabel(m.a) + " v " + teamLabel(m.b) + (ch ? " \ud83d\udcfa " + ch : "");
+    const v = venueLabel(m.g);
+    const sub = [note, v ? "\ud83d\udccd " + v : ""].filter(Boolean).join(" \u00b7 ");
+    return sub ? head + "\n" + sub : head;
+  });
+  return "\u26bd WORLD CUP 2026 \u2014 TODAY'S MATCHES\n" + niceDay + " (all times UK)\n\n" + lines.join("\n\n");
+}
+
+async function buildResultsMsg(matches, live, targetDay, niceDay, setStatus){
+  const played = matches.filter(m => {
+    const ko = kickoffUTC(m);
+    return ko && ukDateStr(ko) === targetDay;
+  });
+  if(played.length === 0) return "\u26bd WORLD CUP 2026 \u2014 " + niceDay + "\n\nNo matches were played yesterday.";
+
+  let scores = {};
+  played.forEach(m => { if(m.s) scores[m.a + "|" + m.b] = m.s; });
+
+  const missing = played.filter(m => !scores[m.a + "|" + m.b]);
+  if(missing.length > 0){
+    setStatus("Looking up " + missing.length + " score(s) via Claude web search\u2026");
+    try{
+      const found = await fetchScoresViaClaude(missing, niceDay);
+      found.forEach(f => { if(f.ft) scores[f.team1 + "|" + f.team2] = f.ft; });
+    }catch(_){ /* fall through; unscored matches will say so */ }
+  }
+
+  const lines = played.map(m => {
+    const s = scores[m.a + "|" + m.b];
+    const note = playerNote(m.a, m.b);
+    const head = s
+      ? teamLabel(m.a) + " " + s[0] + "\u2013" + s[1] + " " + teamLabel(m.b)
+      : teamLabel(m.a) + " v " + teamLabel(m.b) + " \u2014 result not confirmed yet";
+    return note ? head + "\n" + note : head;
+  });
+  return "\u26bd WORLD CUP 2026 \u2014 RESULTS\n" + niceDay + "\n\n" + lines.join("\n\n");
+}
+
+/* ---------- Leaderboard ---------- */
+const mKey = m => m.a + "|" + m.b + "|" + m.d;
+
+async function cacheGet(key){
+  try{
+    if(!window.storage) return {};
+    const r = await window.storage.get(key);
+    return r ? JSON.parse(r.value) : {};
+  }catch(_){ return {}; }
+}
+async function cacheSet(key, map){
+  try{ if(window.storage) await window.storage.set(key, JSON.stringify(map)); }catch(_){}
+}
+
+/* Gather scores for every match that has finished (kick-off + 2h45 before now). */
+async function gatherAllScores(matches, setStatus){
+  const now = Date.now();
+  const finished = matches.filter(m => {
+    const ko = kickoffUTC(m);
+    return ko && (ko.getTime() + 165*60000) < now && FLAGS[m.a] && FLAGS[m.b];
+  });
+  const scores = await cacheGet("wc26-scores");
+  finished.forEach(m => { if(m.s) scores[mKey(m)] = m.s; });
+
+  let missing = finished.filter(m => !scores[mKey(m)]);
+  if(missing.length > 0){
+    for(let i = 0; i < missing.length; i += 12){
+      const batch = missing.slice(i, i + 12);
+      setStatus("Looking up scores via Claude web search\u2026 (" + Math.min(i+12, missing.length) + "/" + missing.length + ")");
+      try{
+        const day = batch.map(m => m.d).filter((v,j,a)=>a.indexOf(v)===j).join(", ");
+        const found = await fetchScoresViaClaude(batch, day);
+        found.forEach(f => {
+          const m = batch.find(x => x.a === f.team1 && x.b === f.team2);
+          if(m && f.ft) scores[mKey(m)] = f.ft;
+        });
+      }catch(_){ /* leave missing; they just won't count yet */ }
+    }
+    await cacheSet("wc26-scores", scores);
+  }
+  return {finished, scores};
+}
+
+function buildLeaderboardMsg(finished, scores, niceDay){
+  const table = {};
+  PLAYERS.forEach(([p]) => table[p] = {P:0, W:0, D:0, L:0, GF:0, GA:0});
+  let counted = 0, pending = 0;
+  finished.forEach(m => {
+    const s = scores[mKey(m)];
+    if(!s){ pending++; return; }
+    counted++;
+    [[m.a, s[0], s[1]], [m.b, s[1], s[0]]].forEach(([team, gf, ga]) => {
+      const p = TEAM_TO_PLAYER[team];
+      if(!p) return;
+      const r = table[p];
+      r.P++; r.GF += gf; r.GA += ga;
+      if(gf > ga) r.W++; else if(gf === ga) r.D++; else r.L++;
+    });
+  });
+  if(counted === 0) return "\u26bd WORLD CUP 2026 \u2014 LEADERBOARD\n\nNo completed matches yet \u2014 check back after the first results!";
+
+  const rows = PLAYERS.map(([p]) => {
+    const r = table[p];
+    return {p, ...r, GD: r.GF - r.GA, Pts: r.W*3 + r.D};
+  }).sort((x,y) => y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || x.p.localeCompare(y.p));
+
+  const medals = ["\ud83e\udd47","\ud83e\udd48","\ud83e\udd49"];
+  let lines = [], pos = 0, prev = null;
+  rows.forEach((r, i) => {
+    const sig = r.Pts + "|" + r.GD + "|" + r.GF;
+    if(sig !== prev){ pos = i + 1; prev = sig; }
+    const badge = pos <= 3 ? medals[pos-1] + " " : "";
+    const gd = (r.GD >= 0 ? "+" : "") + r.GD;
+    lines.push(badge + pos + ". " + r.p + " \u2014 P" + r.P + " W" + r.W + " D" + r.D + " L" + r.L + " \u00b7 GD " + gd + " \u00b7 " + r.Pts + "pts");
+  });
+  let msg = "\u26bd WORLD CUP 2026 \u2014 LEADERBOARD\nAfter " + counted + " match" + (counted===1?"":"es") + ", " + niceDay + "\n\n" + lines.join("\n");
+  if(pending > 0) msg += "\n\n(" + pending + " finished match" + (pending===1?"":"es") + " awaiting confirmed scores)";
+  return msg;
+}
+
+/* ---------- UI wiring ---------- */
+const statusEl = document.getElementById("status");
+const chatEl = document.getElementById("chat");
+const msgEl = document.getElementById("msg");
+const btns = [document.getElementById("btnYesterday"), document.getElementById("btnToday"), document.getElementById("btnLeaderboard")];
+const setStatus = s => statusEl.textContent = s;
+
+async function generate(kind){
+  btns.forEach(b => b.disabled = true);
+  setStatus("Loading match data\u2026");
+  chatEl.classList.remove("show");
+  try{
+    const {matches, live} = await loadMatches();
+    const now = new Date();
+    let msg;
+    if(kind === "yesterday"){
+      const target = new Date(now.getTime() - 24*3600*1000);
+      msg = await buildResultsMsg(matches, live, ukDateStr(target), ukNiceDate(target), setStatus);
+    } else if(kind === "leaderboard"){
+      const {finished, scores} = await gatherAllScores(matches, setStatus);
+      msg = buildLeaderboardMsg(finished, scores, ukNiceDate(now));
+    } else {
+      msg = await buildFixturesMsg(matches, ukDateStr(now), ukNiceDate(now), setStatus);
+    }
+    msgEl.textContent = msg;
+    chatEl.classList.add("show");
+    let note = "Ready \u2014 copy it into the family chat.";
+    if(kind === "today" && buildFixturesMsg.tvError){
+      note += " TV channels unavailable \u2014 " + String(buildFixturesMsg.tvError).slice(0,220);
+    } else if(askClaude.mode === "no web search (limited)"){
+      note += " (This environment blocked web search \u2014 lookups ran on Claude's built-in knowledge, so some channels/scores may be missing.)";
+    }
+    setStatus(note);
+  }catch(e){
+    setStatus("Something went wrong (" + e.message + "). Try again in a moment.");
+  }finally{
+    btns.forEach(b => b.disabled = false);
+  }
+}
+
+btns[0].addEventListener("click", () => generate("yesterday"));
+btns[1].addEventListener("click", () => generate("today"));
+btns[2].addEventListener("click", () => generate("leaderboard"));
+
+document.getElementById("btnCopy").addEventListener("click", async () => {
+  const text = msgEl.textContent;
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(_){
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  setStatus("Copied \u2713 \u2014 paste it into WhatsApp.");
+});
+
+document.getElementById("rosterTable").innerHTML = PLAYERS.map(([p, ts]) =>
+  "<tr><td>" + p + "</td><td>" + ts.map(teamLabel).join(" &nbsp;&middot;&nbsp; ") + "</td></tr>"
+).join("");
+
+document.querySelector(".tick").textContent =
+  new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit"}).format(new Date()) + " \u2713\u2713";
+</script>
+</body>
+</html>
