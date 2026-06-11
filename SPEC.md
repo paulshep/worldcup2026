@@ -164,3 +164,9 @@ Third button: **"Leaderboard"** — WhatsApp-ready standings across all 24 playe
 
 ## Change log (cont.)
 - v1.1 — Penalty-shootout and extra-time handling throughout, per user ruling.
+
+## Tomorrow's matches (v1.2)
+Fourth button: **"Tomorrow's matches"** — identical format to today's fixtures (kick-off BST, flags, 📺 channel, players, 📍 city) for the next UK day, headed "TOMORROW'S MATCHES". Fixture builder label parameterised; rest days say "No matches tomorrow".
+
+## Change log (cont.)
+- v1.2 — Added Tomorrow's matches button; published.
