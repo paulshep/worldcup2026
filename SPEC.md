@@ -155,3 +155,12 @@ Third button: **"Leaderboard"** — WhatsApp-ready standings across all 24 playe
 
 ## Change log (cont.)
 - v1.0 — Published to GitHub Pages; deployment verified via API.
+
+## Knockout result rules — DECIDED (v1.1)
+- User ruling: **a win on penalties is a win.** Leaderboard W/D/L: higher score after 90/120 mins wins; if level and a shootout occurred, the shootout winner takes the W and the loser the L (no points for the 120-min draw beyond the 3 for the W; goal difference uses goals only, never pens).
+- Score storage format extended: [a,b] = 90-min result; [a,b,"aet"] = decided in extra time; [a,b,pa,pb] = pens. Backwards-compatible with cached 2-element scores.
+- Results message renders " aet" and " (4–3 pens)" suffixes. Embedded data generator, live-fetch normaliser, and the Claude score-lookup prompt all carry extra-time and shootout detail.
+- Tested: pens W/L attribution, aet display, GD unaffected by shootouts.
+
+## Change log (cont.)
+- v1.1 — Penalty-shootout and extra-time handling throughout, per user ruling.
