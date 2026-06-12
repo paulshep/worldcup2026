@@ -1,7 +1,8 @@
 {
- "ran": "2026-06-12T05:31:28+00:00",
+ "ran": "2026-06-12T10:02:38+00:00",
  "diagnostics": {
-  "worldcup26": "2 finished matches"
+  "worldcup26": "2 finished matches",
+  "openfootball": "2 finished matches"
  },
  "played": 2,
  "unmatched": []
