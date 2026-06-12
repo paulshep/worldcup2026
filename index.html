@@ -147,6 +147,36 @@ const FLAGS = {
 
 const DATA_URL = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json";
 
+const REZA_TEAMS = {"1":"Mexico","2":"South Africa","3":"South Korea","4":"Czech Republic","5":"Canada","6":"Bosnia and Herzegovina","7":"Qatar","8":"Switzerland","9":"Brazil","10":"Morocco","11":"Haiti","12":"Scotland","13":"United States","14":"Paraguay","15":"Australia","16":"Turkey","17":"Germany","18":"Curaçao","19":"Ivory Coast","20":"Ecuador","21":"Netherlands","22":"Japan","23":"Sweden","24":"Tunisia","25":"Belgium","26":"Egypt","27":"Iran","28":"New Zealand","29":"Spain","30":"Cape Verde","31":"Saudi Arabia","32":"Uruguay","33":"France","34":"Senegal","35":"Iraq","36":"Norway","37":"Argentina","38":"Algeria","39":"Austria","40":"Jordan","41":"Portugal","42":"Democratic Republic of the Congo","43":"Uzbekistan","44":"Colombia","45":"England","46":"Croatia","47":"Ghana","48":"Panama"};
+const LIVE_URL = "https://worldcup26.ir/get/games";
+function rezaToMatch(g){
+  const a = REZA_TEAMS[String(g.home_team_id)];
+  const b = REZA_TEAMS[String(g.away_team_id)];
+  if(!a || !b) return null;
+  let s;
+  const fin = String(g.finished).toUpperCase() === "TRUE" || ["finished","fulltime"].includes(String(g.time_elapsed).toLowerCase());
+  const hs = parseInt(g.home_score, 10), as = parseInt(g.away_score, 10);
+  if(fin && Number.isFinite(hs) && Number.isFinite(as)){
+    s = [hs, as];
+    const ph = parseInt(g.home_pens ?? g.home_penalties, 10), pa = parseInt(g.away_pens ?? g.away_penalties, 10);
+    if(Number.isFinite(ph) && Number.isFinite(pa)) s = [hs, as, ph, pa];
+  }
+  return {a, b, s};
+}
+async function fetchLiveScores(){
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 7000);
+  const r = await fetch(LIVE_URL, {cache:"no-store", signal:ctl.signal});
+  clearTimeout(timer);
+  if(!r.ok) throw new Error("live HTTP " + r.status);
+  const j = await r.json();
+  const games = Array.isArray(j) ? j : (j.data || j.games || j.matches || []);
+  const map = {};
+  games.forEach(g => { const m = rezaToMatch(g); if(m && m.s) map[m.a + "|" + m.b] = m.s; });
+  return map;
+}
+
+
 /* ---------- Date helpers (anchored to UK time) ---------- */
 function kickoffUTC(m){
   if(!m.d) return null;
@@ -195,10 +225,20 @@ async function loadMatches(){
       })(m.score),
       g: m.ground
     }));
+    await overlayLive(norm);
     return {matches: norm, live: true};
   }catch(_){
-    return {matches: EMBEDDED_MATCHES, live: false};
+    const base = EMBEDDED_MATCHES.map(m => ({...m}));
+    await overlayLive(base);
+    return {matches: base, live: false};
   }
+}
+
+async function overlayLive(matches){
+  try{
+    const live = await fetchLiveScores();
+    matches.forEach(m => { const k = m.a + "|" + m.b; if(live[k]) m.s = live[k]; });
+  }catch(_){ /* keep base scores */ }
 }
 
 /* ---------- Shared Claude + web-search JSON helper ---------- */
