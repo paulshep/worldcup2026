@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Daily leaderboard + scores builder (GitHub Actions).
-Primary source: API-Football (api-sports.io), key from env API_FOOTBALL_KEY (a GitHub
-Actions secret \u2014 never stored in the repo). Fallback: openfootball public dataset.
+Primary source: worldcup26.ir (keyless, real-time). Fallback: openfootball public
+dataset. No API keys anywhere. Merges both so gaps are filled either way.
 Writes scores.json (consumed by the message-maker app) and rebuilds leaderboard.html.
 Never blanks a populated page if a source is lagging.
 """
