@@ -187,3 +187,15 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v1.4 — Duel-framed predictions with table stakes; folksy-optimist tone; published.
+
+## Standalone leaderboard page (v1.5)
+- New second file leaderboard.html published alongside index.html, for a shareable family link that shows only the standings.
+- Distinct visual identity from the message-maker (deliberately not the same green): floodlit-night palette (deep navy + grass undertone), Bebas Neue display / Outfit body / Roboto Mono for stats. Signature element = a three-place podium with the leader raised centre, medal-coloured top edges, each plinth showing the player's two team flags.
+- Full 24-row table below: position (shared on ties), player + flags, Played, W·D·L (colour-coded), GD (green/red), Points. Top three highlighted.
+- Live + self-updating: fetches scores from openfootball on load, auto-refreshes every 5 minutes, plus a manual Refresh button with an "Updated HH:MM" UK stamp. Falls back to embedded fixtures if the fetch is blocked. Same pens-win-is-a-win and finished-match (KO+2h45) rules as the main app.
+- Empty state before the first goal: "No goals yet — the table wakes up the moment the first whistle blows."
+- Responsive to narrow phones; reduced-motion respected; design verified via screenshot.
+- URL once Pages rebuilds: https://paulshep.github.io/worldcup2026/leaderboard.html
+
+## Change log (cont.)
+- v1.5 — Published standalone auto-refreshing leaderboard page with podium design.
