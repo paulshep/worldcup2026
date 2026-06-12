@@ -250,3 +250,15 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v1.9 — Rejected paid-only API-Football; built keyless worldcup26.ir + openfootball merge in the Action, publishing scores.json (consumed by the app) and build-status.json. Live-verified.
+
+## Bracket page (v2.0)
+- New standalone file bracket.html (published; not yet cross-linked to the leaderboard — links to be added later in the tournament per request).
+- Renders the full 2026 knockout structure (new 48-team format): Round of 32 (matches 73-88), Round of 16 (89-96), Quarter-finals (97-100), Semi-finals (101-102), Third-place play-off (103), Final (104) — wiring taken from the openfootball feed (authoritative slot labels: 1A/2B winners-runners-up, 3A/B/C/D/F best-third slots, W##/L## feeders).
+- Round-tab navigation (R32/R16/QF/SF/3rd/Final) — phone-first; avoids the unreadable tiny-tree problem. Each tie is a card: both teams (flag + name, or italic placeholder like "Winner Group E" / "3rd place (A/B/C/D/F)"), match number, date, venue, score when played, winner highlighted gold, penalties shown.
+- Sweepstake hook: each known team shows its owner tag, and a "Sweepstake survivors" strip lists players whose teams are still alive (a team is dropped once it loses a knockout match). Hidden until the knockouts begin.
+- Auto-populates: reads the live openfootball feed; resolves W##/L## chains so later rounds fill in as earlier results land. Falls back to embedded placeholders. Same floodlit design language as the leaderboard.
+- Current state (group stage): all slots show placeholders with correct dates/venues, ready to populate from 28 June.
+- TODO later: cross-link leaderboard <-> bracket; the daily Action could also rebuild a static bracket if desired (currently client-rendered).
+
+## Change log (cont.)
+- v2.0 — Added standalone bracket.html (knockout tree, owner tags, survivors strip), auto-populating from live data. Not yet linked from leaderboard.
