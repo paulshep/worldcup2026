@@ -39,31 +39,35 @@ def resolve(name):
         _unmatched.add(name)
     return t
 
-# ---- primary: API-Football ----
-def fetch_apifootball(key):
-    url = "https://v3.football.api-sports.io/fixtures?league=1&season=2026"
-    req = urllib.request.Request(url, headers={"x-apisports-key": key})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        data = json.load(r)
-    if data.get("errors"):
-        raise RuntimeError("API-Football errors: " + json.dumps(data["errors"])[:200])
+# ---- primary: worldcup26.ir live API (keyless, real-time) ----
+REZA_TEAMS = {"1": "Mexico", "2": "South Africa", "3": "South Korea", "4": "Czech Republic", "5": "Canada", "6": "Bosnia and Herzegovina", "7": "Qatar", "8": "Switzerland", "9": "Brazil", "10": "Morocco", "11": "Haiti", "12": "Scotland", "13": "United States", "14": "Paraguay", "15": "Australia", "16": "Turkey", "17": "Germany", "18": "Curaçao", "19": "Ivory Coast", "20": "Ecuador", "21": "Netherlands", "22": "Japan", "23": "Sweden", "24": "Tunisia", "25": "Belgium", "26": "Egypt", "27": "Iran", "28": "New Zealand", "29": "Spain", "30": "Cape Verde", "31": "Saudi Arabia", "32": "Uruguay", "33": "France", "34": "Senegal", "35": "Iraq", "36": "Norway", "37": "Argentina", "38": "Algeria", "39": "Austria", "40": "Jordan", "41": "Portugal", "42": "Democratic Republic of the Congo", "43": "Uzbekistan", "44": "Colombia", "45": "England", "46": "Croatia", "47": "Ghana", "48": "Panama"}
+REZA_FIX = {"Turkiye":"Turkey","Cote d'Ivoire":"Ivory Coast"}  # safety, map already normalised
+def fetch_live():
+    url = "https://worldcup26.ir/get/games"
+    req = urllib.request.Request(url, headers={"User-Agent": "wc26-bot", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        j = json.load(r)
+    games = j if isinstance(j, list) else (j.get("data") or j.get("games") or j.get("matches") or [])
     out = []
-    for fx in data.get("response", []):
-        st = (fx.get("fixture", {}).get("status", {}) or {}).get("short")
-        if st not in ("FT", "AET", "PEN"):
-            continue
-        a = resolve(fx["teams"]["home"]["name"]); b = resolve(fx["teams"]["away"]["name"])
+    for g in games:
+        a = REZA_TEAMS.get(str(g.get("home_team_id")))
+        b = REZA_TEAMS.get(str(g.get("away_team_id")))
         if not a or not b:
             continue
-        gh = fx["goals"]["home"]; ga = fx["goals"]["away"]
-        if gh is None or ga is None:
+        fin = str(g.get("finished")).upper() == "TRUE" or str(g.get("time_elapsed")).lower() in ("finished", "fulltime")
+        try:
+            gh = int(g.get("home_score")); ga = int(g.get("away_score"))
+        except (TypeError, ValueError):
             continue
-        s = [int(gh), int(ga)]
-        if st == "PEN":
-            pen = fx.get("score", {}).get("penalty", {}) or {}
-            if pen.get("home") is not None and pen.get("away") is not None:
-                s += [int(pen["home"]), int(pen["away"])]
-        out.append({"a": a, "b": b, "s": s})
+        if not fin:
+            continue
+        s2 = [gh, ga]
+        for hk, ak in (("home_pens","away_pens"), ("home_penalties","away_penalties")):
+            try:
+                s2 += [int(g[hk]), int(g[ak])]; break
+            except (KeyError, TypeError, ValueError):
+                pass
+        out.append({"a": a, "b": b, "s": s2})
     return out
 
 # ---- fallback: openfootball ----
@@ -88,19 +92,14 @@ def fetch_openfootball():
 
 DIAG = {}
 def get_matches():
-    key = os.environ.get("API_FOOTBALL_KEY", "").strip()
-    DIAG["key_present"] = bool(key)
-    if key:
-        try:
-            m = fetch_apifootball(key)
-            DIAG["apifootball"] = f"{len(m)} finished matches"
-            print(f"API-Football: {len(m)} finished matches")
-            if m: return m, "api-football"
-        except Exception as e:
-            DIAG["apifootball"] = "ERROR: " + str(e)[:300]
-            print("API-Football failed, trying openfootball:", e)
-    else:
-        DIAG["apifootball"] = "no key in env"
+    try:
+        m = fetch_live()
+        DIAG["worldcup26"] = f"{len(m)} finished matches"
+        print(f"worldcup26.ir: {len(m)} finished matches")
+        if m: return m, "worldcup26.ir"
+    except Exception as e:
+        DIAG["worldcup26"] = "ERROR: " + str(e)[:200]
+        print("worldcup26.ir failed, trying openfootball:", e)
     m = fetch_openfootball()
     DIAG["openfootball"] = f"{len(m)} finished matches"
     print(f"openfootball: {len(m)} finished matches")
