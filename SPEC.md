@@ -225,3 +225,14 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v1.7 — Switched summary generators (results, today, tomorrow, commentary) from calendar-date to rolling 24-hour windows so wrap-around gamedays stay intact.
+
+## Leaderboard switched to static, daily-generated (v1.8)
+- Decision: the leaderboard is now generated here (Claude, with reliable web-searched & confirmed scores) and published as fully static HTML, rather than fetching from the community live API in the browser. Reasons: the live API's uptime/CORS over a month were unproven, openfootball lags, and a sweepstake table doesn't need minute-by-minute liveness — once a day is ideal.
+- leaderboard.html is now pure static: no fetch, no JS, no live API dependency. The podium + 24-row table are pre-rendered from standings computed at generation time. Displays instantly, can't break, works with JS disabled.
+- Footer reads "Updated <date> · refreshed daily" (no live dot). Same floodlit design, podium, tie handling, pens-win rule.
+- Generation script: gen_static_leaderboard.py — holds a RESULTS list (confirmed scores) and an UPDATED stamp; recomputes standings and re-emits the static page. To refresh: confirm the day's scores via search, append to RESULTS, bump UPDATED, regenerate, publish.
+- Current standings baked in (as of 12 Jun, 2 matches): Lou 3pts (+2, Mexico 2-0), Nick 3pts (+1, South Korea 2-1); Laura 23rd (Czech Republic L), Carlotta 24th (South Africa L); all others level on 0.
+- The main message-maker app (index.html) keeps its live/commentary features and the rolling-window logic; only the standalone leaderboard page became static.
+
+## Change log (cont.)
+- v1.8 — Standalone leaderboard regenerated as static HTML from confirmed scores; removed client-side live fetch from that page.
