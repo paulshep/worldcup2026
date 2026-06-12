@@ -210,3 +210,18 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v1.6 — Added rezarahiminia/worldcup26.ir as real-time primary score source (both files), with openfootball + embedded fallback chain.
+
+## Rolling 24-hour windows (v1.7)
+- Problem: grouping matches by UK calendar date split a single FIFA gameday across two UK dates, because late US/Mexico kick-offs (e.g. 8pm local) land in the early hours of the next UK day. A morning "yesterday's results" recap missed those wrap-around matches.
+- Fix: results and fixtures now use rolling 24h windows anchored on the moment the button is pressed, not calendar dates.
+  - Yesterday's results / commentary recap: kick-off within the last 24h [now-24h, now).
+  - Today's matches / commentary predictions: next 24h [now, now+24h).
+  - Tomorrow's matches: [now+24h, now+48h).
+  - Commentary "before" table (for overnight movers): finished matches older than 24h.
+- Headers now derive from the matches actually in the window: a single UK date when they share one, or a range ("Friday 12 – Saturday 13 June") when a gameday straddles midnight. Empty windows say "No matches in the last/next 24 hours."
+- Leaderboard unaffected (it always counts all finished matches).
+- Note on timing: because the window is relative to press time, the family's habitual morning post captures the just-finished gameday cleanly. Pressing "today's matches" late in the evening will show the next 24h (i.e. tonight's late games + tomorrow morning's), which is the intended rolling behaviour.
+- Tested: wrap-around gameday captured intact for both results and fixtures; rest-day empty states; full headless click-through of all five buttons with no errors.
+
+## Change log (cont.)
+- v1.7 — Switched summary generators (results, today, tomorrow, commentary) from calendar-date to rolling 24-hour windows so wrap-around gamedays stay intact.
