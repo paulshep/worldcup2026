@@ -199,3 +199,14 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v1.5 — Published standalone auto-refreshing leaderboard page with podium design.
+
+## Live score source (v1.6)
+- Root cause of "no goals yet": openfootball is updated by hand ~once a day (maintainer's own note), so day-1 results weren't in the feed. Confirmed the real results existed (Mexico 2-0 South Africa; South Korea 2-1 Czech Republic) while the feed still showed none.
+- Added a real-time primary source: rezarahiminia / worldcup26.ir (free, no API key, World-Cup-specific live scores). Endpoint GET https://worldcup26.ir/get/games.
+- Resolution chain now: live API scores (primary) overlaid onto base fixtures, with openfootball live JSON then the embedded snapshot as fallbacks. If the live API is unreachable or sends no usable scores, the page silently uses the base data — never worse than before.
+- Mapping: API keys teams by numeric id; built REZA_TEAMS id→name map for all 48 (normalising Türkiye, Côte d'Ivoire, Czechia, Bosnia and Herzegovina, DR Congo full name, United States to our canonical names). Only the SCORE is taken from the live feed; authoritative kick-off date/time/venue stay from embedded data. Penalty fields consumed if present.
+- Applied to BOTH files. Leaderboard footer shows "Updated HH:MM · live" when the live source succeeded. Verified end-to-end in headless browser with the two real day-1 results tallying correctly; no runtime errors.
+- Caveat: rezarahiminia is a community/hobby host; reliability and CORS behaviour in real browsers are unproven over a full month, hence the layered fallback. If it proves flaky, the fallbacks keep the pages working.
+
+## Change log (cont.)
+- v1.6 — Added rezarahiminia/worldcup26.ir as real-time primary score source (both files), with openfootball + embedded fallback chain.
