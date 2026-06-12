@@ -1,10 +1,8 @@
 {
- "ran": "2026-06-12T05:27:14+00:00",
+ "ran": "2026-06-12T05:31:28+00:00",
  "diagnostics": {
-  "key_present": true,
-  "apifootball": "ERROR: API-Football errors: {\"plan\": \"Free plans do not have access to this season, try from 2022 to 2024.\"}",
-  "openfootball": "0 finished matches"
+  "worldcup26": "2 finished matches"
  },
- "played": 0,
+ "played": 2,
  "unmatched": []
 }
