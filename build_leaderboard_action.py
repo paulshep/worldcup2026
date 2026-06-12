@@ -52,6 +52,8 @@ def fetch_live():
     for g in games:
         a = REZA_TEAMS.get(str(g.get("home_team_id")))
         b = REZA_TEAMS.get(str(g.get("away_team_id")))
+        a = resolve(a) if a else None
+        b = resolve(b) if b else None
         if not a or not b:
             continue
         fin = str(g.get("finished")).upper() == "TRUE" or str(g.get("time_elapsed")).lower() in ("finished", "fulltime")
@@ -92,18 +94,27 @@ def fetch_openfootball():
 
 DIAG = {}
 def get_matches():
+    live, of = [], []
     try:
-        m = fetch_live()
-        DIAG["worldcup26"] = f"{len(m)} finished matches"
-        print(f"worldcup26.ir: {len(m)} finished matches")
-        if m: return m, "worldcup26.ir"
+        live = fetch_live()
+        DIAG["worldcup26"] = f"{len(live)} finished matches"
+        print(f"worldcup26.ir: {len(live)} finished matches")
     except Exception as e:
         DIAG["worldcup26"] = "ERROR: " + str(e)[:200]
-        print("worldcup26.ir failed, trying openfootball:", e)
-    m = fetch_openfootball()
-    DIAG["openfootball"] = f"{len(m)} finished matches"
-    print(f"openfootball: {len(m)} finished matches")
-    return m, "openfootball"
+        print("worldcup26.ir failed:", e)
+    try:
+        of = fetch_openfootball()
+        DIAG["openfootball"] = f"{len(of)} finished matches"
+        print(f"openfootball: {len(of)} finished matches")
+    except Exception as e:
+        DIAG["openfootball"] = "ERROR: " + str(e)[:200]
+        print("openfootball failed:", e)
+    by_key = {}
+    for m in of:   by_key[m["a"] + "|" + m["b"]] = m   # base
+    for m in live: by_key[m["a"] + "|" + m["b"]] = m   # live wins
+    merged = list(by_key.values())
+    source = "worldcup26.ir" if live else ("openfootball" if of else "none")
+    return merged, source
 
 # ---- standings ----
 def tally(matches):
