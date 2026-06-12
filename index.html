@@ -192,6 +192,23 @@ const ukDateStr = d => new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London"
 const ukTime = d => new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"numeric",minute:"2-digit",hour12:true}).format(d).replace(/\s/g,"");
 const ukNiceDate = d => new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"long",day:"numeric",month:"long"}).format(d);
 
+/* Rolling-window helpers. We group by a 24h window from "now" rather than by UK
+   calendar date, so a gameday whose late US kick-offs spill into the early hours of
+   the next UK day stays together instead of being split across two dates. */
+const HOUR = 3600*1000, DAY = 24*HOUR;
+function inWindow(ko, startMs, endMs){ return ko && ko.getTime() >= startMs && ko.getTime() < endMs; }
+const ukShort = d => new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"long",day:"numeric",month:"long"}).format(d);
+/* Label a set of in-window matches by the UK date(s) they actually span. */
+function windowLabel(kos){
+  if(!kos.length) return "";
+  const days = [...new Set(kos.map(k => ukDateStr(k)))].sort();
+  if(days.length === 1) return ukShort(new Date(days[0] + "T12:00:00Z"));
+  const first = ukShort(new Date(days[0] + "T12:00:00Z"));
+  const last = ukShort(new Date(days[days.length-1] + "T12:00:00Z"));
+  // trim the month off the first if both share it, e.g. "Wednesday 10 – Thursday 11 June"
+  return first + " – " + last;
+}
+
 /* ---------- Formatting ---------- */
 const teamLabel = n => (FLAGS[n] ? FLAGS[n] + " " + n : n);
 const venueLabel = g => g ? g.replace(/\s*\(.*\)\s*$/, "") : "";
@@ -307,14 +324,15 @@ async function fetchChannelsViaClaude(fixtures, niceDay){
 
 
 /* ---------- Message builders ---------- */
-async function buildFixturesMsg(matches, targetDay, niceDay, setStatus, label){
+async function buildFixturesMsg(matches, startMs, endMs, setStatus, label){
   label = label || "TODAY";
   buildFixturesMsg.tvError = null;
   const todays = matches
     .map(m => ({m, ko: kickoffUTC(m)}))
-    .filter(x => x.ko && ukDateStr(x.ko) === targetDay)
+    .filter(x => inWindow(x.ko, startMs, endMs))
     .sort((a,b) => a.ko - b.ko);
-  if(todays.length === 0) return "\u26bd WORLD CUP 2026 \u2014 " + niceDay + "\n\nNo matches " + label.toLowerCase() + ". Rest those nerves!";
+  const niceDay = windowLabel(todays.map(x => x.ko)) || "the next 24 hours";
+  if(todays.length === 0) return "\u26bd WORLD CUP 2026 \u2014 " + (label === "TOMORROW" ? "TOMORROW" : "TODAY") + "\n\nNo matches in the " + (label === "TOMORROW" ? "following" : "next") + " 24 hours. Rest those nerves!";
 
   /* UK TV channels: embedded schedule first, then cache, then Claude web search */
   const tv = await cacheGet("wc26-tv");
@@ -347,12 +365,10 @@ async function buildFixturesMsg(matches, targetDay, niceDay, setStatus, label){
   return "\u26bd WORLD CUP 2026 \u2014 " + label + "'S MATCHES\n" + niceDay + " (all times UK)\n\n" + lines.join("\n\n");
 }
 
-async function buildResultsMsg(matches, live, targetDay, niceDay, setStatus){
-  const played = matches.filter(m => {
-    const ko = kickoffUTC(m);
-    return ko && ukDateStr(ko) === targetDay;
-  });
-  if(played.length === 0) return "\u26bd WORLD CUP 2026 \u2014 " + niceDay + "\n\nNo matches were played yesterday.";
+async function buildResultsMsg(matches, live, startMs, endMs, setStatus){
+  const played = matches.filter(m => inWindow(kickoffUTC(m), startMs, endMs));
+  const niceDay = windowLabel(played.map(m => kickoffUTC(m))) || "the last 24 hours";
+  if(played.length === 0) return "\u26bd WORLD CUP 2026 \u2014 RESULTS\n\nNo matches in the last 24 hours.";
 
   let scores = {};
   played.forEach(m => { if(m.s) scores[m.a + "|" + m.b] = m.s; });
@@ -631,13 +647,12 @@ function localCommentary(results, scores, prevRows, currRows, todays){
 
 async function buildCommentaryMsg(matches, setStatus){
   const now = new Date();
-  const yest = new Date(now.getTime() - 24*3600*1000);
-  const yDay = ukDateStr(yest), tDay = ukDateStr(now);
+  const N = now.getTime();
   const {finished, scores} = await gatherAllScores(matches, setStatus);
-  const results = matches.filter(m => { const ko = kickoffUTC(m); return ko && ukDateStr(ko) === yDay; });
+  const results = matches.filter(m => inWindow(kickoffUTC(m), N - DAY, N));   // last 24h
   const todays = matches.map(m => ({m, ko: kickoffUTC(m)}))
-    .filter(x => x.ko && ukDateStr(x.ko) === tDay).sort((a,b) => a.ko - b.ko);
-  const before = finished.filter(m => { const ko = kickoffUTC(m); return ukDateStr(ko) < yDay; });
+    .filter(x => inWindow(x.ko, N, N + DAY)).sort((a,b) => a.ko - b.ko);       // next 24h
+  const before = finished.filter(m => { const ko = kickoffUTC(m); return ko && ko.getTime() < (N - DAY); });
   const prevRows = computeRows(tallyTable(before, scores));
   const currRows = computeRows(tallyTable(finished, scores));
 
@@ -674,19 +689,18 @@ async function generate(kind){
     const {matches, live} = await loadMatches();
     const now = new Date();
     let msg;
+    const N = now.getTime();
     if(kind === "yesterday"){
-      const target = new Date(now.getTime() - 24*3600*1000);
-      msg = await buildResultsMsg(matches, live, ukDateStr(target), ukNiceDate(target), setStatus);
+      msg = await buildResultsMsg(matches, live, N - DAY, N, setStatus);
     } else if(kind === "commentary"){
       msg = await buildCommentaryMsg(matches, setStatus);
     } else if(kind === "leaderboard"){
       const {finished, scores} = await gatherAllScores(matches, setStatus);
       msg = buildLeaderboardMsg(finished, scores, ukNiceDate(now));
     } else if(kind === "tomorrow"){
-      const target = new Date(now.getTime() + 24*3600*1000);
-      msg = await buildFixturesMsg(matches, ukDateStr(target), ukNiceDate(target), setStatus, "TOMORROW");
+      msg = await buildFixturesMsg(matches, N + DAY, N + 2*DAY, setStatus, "TOMORROW");
     } else {
-      msg = await buildFixturesMsg(matches, ukDateStr(now), ukNiceDate(now), setStatus, "TODAY");
+      msg = await buildFixturesMsg(matches, N, N + DAY, setStatus, "TODAY");
     }
     msgEl.textContent = msg;
     chatEl.classList.add("show");
