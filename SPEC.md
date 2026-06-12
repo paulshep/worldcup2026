@@ -236,3 +236,17 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v1.8 — Standalone leaderboard regenerated as static HTML from confirmed scores; removed client-side live fetch from that page.
+
+## Data source — final keyless architecture (v1.9)
+- API-Football was evaluated and rejected: its free plan returned "Free plans do not have access to this season, try from 2022 to 2024" — the 2026 World Cup needs a paid tier. No money spent; the unused API_FOOTBALL_KEY secret can be deleted.
+- Adopted a keyless two-source pipeline in the GitHub Action build script:
+  - Primary: worldcup26.ir (rezarahiminia, real-time, no key). Team ids mapped to our canonical names (id-map + resolve()/alias normalisation for Türkiye, Côte d'Ivoire, United States, DR Congo, Korea, Bosnia, Cabo Verde, Czechia).
+  - Fallback/merge: openfootball. Both sources are merged (live wins per match), so a gap in one is filled by the other.
+  - Anti-regression guard retained: never blanks a populated page if both sources come back empty.
+- The Action now also writes scores.json (keyed by our canonical names) and build-status.json (diagnostics: which source ran, counts, any unmatched names) and commits all three.
+- The message-maker app (index.html) reads the published scores.json first (same-origin on GitHub Pages, keyless), then the live API, then embedded/Claude-search — so its results/leaderboard/commentary get the same reliable scores without any client-side key.
+- Verified live: the Action pulled both real day-1 results (Mexico 2-0 South Africa, South Korea 2-1 Czech Republic) from worldcup26.ir with zero manual input, committed scores.json + a rebuilt leaderboard. build-status.json: worldcup26 "2 finished matches", played 2, no unmatched teams.
+- Security: no API keys or secrets anywhere in the repo or any published file. Workflow uses GitHub's built-in token for commits; any future key would live only in Actions Secrets (added by the user directly), never committed.
+
+## Change log (cont.)
+- v1.9 — Rejected paid-only API-Football; built keyless worldcup26.ir + openfootball merge in the Action, publishing scores.json (consumed by the app) and build-status.json. Live-verified.
