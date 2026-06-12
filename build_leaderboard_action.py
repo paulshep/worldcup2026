@@ -86,18 +86,23 @@ def fetch_openfootball():
         out.append({"a": a, "b": b, "s": s})
     return out
 
+DIAG = {}
 def get_matches():
     key = os.environ.get("API_FOOTBALL_KEY", "").strip()
+    DIAG["key_present"] = bool(key)
     if key:
         try:
             m = fetch_apifootball(key)
+            DIAG["apifootball"] = f"{len(m)} finished matches"
             print(f"API-Football: {len(m)} finished matches")
-            return m, "api-football"
+            if m: return m, "api-football"
         except Exception as e:
+            DIAG["apifootball"] = "ERROR: " + str(e)[:300]
             print("API-Football failed, trying openfootball:", e)
     else:
-        print("No API_FOOTBALL_KEY set; using openfootball")
+        DIAG["apifootball"] = "no key in env"
     m = fetch_openfootball()
+    DIAG["openfootball"] = f"{len(m)} finished matches"
     print(f"openfootball: {len(m)} finished matches")
     return m, "openfootball"
 
@@ -196,6 +201,14 @@ def main():
     if _unmatched:
         print("WARNING unmatched team names:", sorted(_unmatched))
     rows, played = tally(matches)
+
+    try:
+        with open("build-status.json", "w", encoding="utf-8") as f:
+            json.dump({"ran": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+                       "diagnostics": DIAG, "played": played,
+                       "unmatched": sorted(_unmatched)}, f, ensure_ascii=False, indent=1)
+    except Exception as _e:
+        print("could not write build-status.json:", _e)
 
     # anti-regression: don't blank a populated page on a lagging/empty source
     if played == 0 and os.path.exists("leaderboard.html"):
