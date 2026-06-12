@@ -1,0 +1,33 @@
+name: Daily leaderboard rebuild
+
+on:
+  schedule:
+    # 07:00 and 13:00 UTC daily — after most overnight (US-evening) games finish
+    - cron: "0 7 * * *"
+    - cron: "0 13 * * *"
+  workflow_dispatch: {}   # allow manual runs from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Rebuild leaderboard.html
+        run: python build_leaderboard_action.py
+      - name: Commit if changed
+        run: |
+          if [ -n "$(git status --porcelain leaderboard.html)" ]; then
+            git config user.name "sweepstake-bot"
+            git config user.email "actions@github.com"
+            git add leaderboard.html
+            git commit -m "Daily leaderboard rebuild [skip ci]"
+            git push
+          else
+            echo "No change to leaderboard.html"
+          fi
