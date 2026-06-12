@@ -1,9 +1,8 @@
-name: Daily leaderboard rebuild
+name: Hourly leaderboard rebuild
 
 on:
   schedule:
-    - cron: "0 7 * * *"
-    - cron: "0 13 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -18,8 +17,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Rebuild leaderboard.html
-        env:
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: python build_leaderboard_action.py
       - name: Commit if changed
         run: |
@@ -31,6 +28,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Daily leaderboard rebuild [skip ci]"
+            git commit -m "Hourly leaderboard rebuild [skip ci]"
             git push
           fi
