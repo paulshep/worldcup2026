@@ -262,3 +262,19 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.0 — Added standalone bracket.html (knockout tree, owner tags, survivors strip), auto-populating from live data. Not yet linked from leaderboard.
+
+## Commentary engine overhaul (v2.1)
+- Why: on the hosted site the Claude-written path can't run (a static page can't auth to the Anthropic API), so the family always sees the LOCAL phrase-bank engine. That fallback was thin (2-option pools -> repeats with several matches) and wrongly referenced extra time, which can't occur in the group stage.
+- Rewrote localCommentary():
+  - Anti-repetition picker (makePicker): never reuses a template from a category within one message until that pool is exhausted; pools enlarged to 3-9 options each across openers, result colour, table talk, prediction kickers, signoffs.
+  - Placeholder templates ({T}/{PL}/{B2} etc.) filled after selection, so variety + clean substitution.
+  - Group-stage correctness: a knockout flag (true only from 28 Jun 2026) gates ALL extra-time/penalty/shootout language. In the group stage draws are framed as shared points; no ET/pens wording anywhere. Removed the old "even if it's just extra time" joke.
+  - Data-driven colour: phrasing branches on margin (1/2/3+), clean sheet, goalless vs scoring draw; plus a computed "talking point of the day" (rout of the day when max margin >=3, or goal-fest when an aggregate >=5).
+  - Recap only includes matches that have actually finished (kickoff + 2h45 < now), so in-play games aren't reported as results.
+  - Mover line suppressed when no prior-window results existed (avoids meaningless "up 19 places" from alphabetical noise); top-3 players with no upward stake get a "protect Nth place" line.
+  - Capitalisation fix on the stakes clause.
+- Claude-written path (used on claude.ai) also updated: prompt now states the phase and forbids extra-time/penalty references during the group stage, and asks for varied, non-repeating phrasing.
+- Verified: realistic current-day output (USA 4-1 rout, Canada 1-1 draw, table talk, four varied duel predictions) reads cleanly with no repeats and no ET language; full headless app test passes with no errors.
+
+## Change log (cont.)
+- v2.1 — Overhauled the local commentary engine: anti-repetition, richer data-driven phrasing, group-stage correctness (no extra-time references), finished-only recap.
