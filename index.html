@@ -827,8 +827,12 @@ async function buildCommentaryMsg(matches, setStatus){
   try{
     const data = {
       phase: phase,
-      // Each result names BOTH actual teams and the family owner of each, so no other teams get conflated.
-      results: results.map(m => {
+      roundup_note: "recent_results lists ONLY matches played in the last 24 hours (this is a daily round-up). " +
+                    "games_played_in_tournament_total is the running total across all match-days so far. " +
+                    "sweepstake_table reflects ALL games played, not just the recent ones.",
+      games_in_this_roundup: results.length,
+      games_played_in_tournament_total: finished.length,
+      recent_results: results.map(m => {
         const s = scores[mKey(m)];
         return {
           team_home: m.a, owner_home: TEAM_TO_PLAYER[m.a] || null,
@@ -856,6 +860,9 @@ async function buildCommentaryMsg(matches, setStatus){
       + "owner of each team; (2) how the sweepstake_table looks now; (3) a short preview of each upcoming fixture as a "
       + "friendly duel between the two family owners, noting what a win would mean for their league position.\n\n"
       + "STRICT ACCURACY RULES \u2014 follow exactly:\n"
+      + "\u2022 recent_results are ONLY the games from the last 24 hours. Do NOT imply they are the only games of the "
+      + "tournament or state a tournament-wide game count from them \u2014 use games_played_in_tournament_total for any total. "
+      + "Frame the recap as the latest match-day, not the start of the tournament (unless the total equals the recent count).\n"
       + "\u2022 Each fixture has EXACTLY TWO teams: team_home and team_away. Only ever describe those two teams playing each "
       + "other. NEVER introduce a third team and never mention a player's other teams in the context of a match they are not in.\n"
       + "\u2022 owner_home owns team_home; owner_away owns team_away. Attribute correctly. If same_owner is true, that one "
