@@ -146,6 +146,7 @@ const FLAGS = {
 };
 
 const DATA_URL = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json";
+const LEADERBOARD_FOOTER = "\n\n\ud83d\udcca Full table: https://paulshep.github.io/worldcup2026/leaderboard.html";
 
 const REZA_TEAMS = {"1":"Mexico","2":"South Africa","3":"South Korea","4":"Czech Republic","5":"Canada","6":"Bosnia and Herzegovina","7":"Qatar","8":"Switzerland","9":"Brazil","10":"Morocco","11":"Haiti","12":"Scotland","13":"United States","14":"Paraguay","15":"Australia","16":"Turkey","17":"Germany","18":"Curaçao","19":"Ivory Coast","20":"Ecuador","21":"Netherlands","22":"Japan","23":"Sweden","24":"Tunisia","25":"Belgium","26":"Egypt","27":"Iran","28":"New Zealand","29":"Spain","30":"Cape Verde","31":"Saudi Arabia","32":"Uruguay","33":"France","34":"Senegal","35":"Iraq","36":"Norway","37":"Argentina","38":"Algeria","39":"Austria","40":"Jordan","41":"Portugal","42":"Democratic Republic of the Congo","43":"Uzbekistan","44":"Colombia","45":"England","46":"Croatia","47":"Ghana","48":"Panama"};
 const LIVE_URL = "https://worldcup26.ir/get/games";
@@ -821,20 +822,52 @@ async function buildCommentaryMsg(matches, setStatus){
 
   /* Prefer Claude-written commentary when the environment allows */
   setStatus("Warming up the commentary box\u2026");
+  const fmtScore = s => s ? (s[0] + "-" + s[1] + (s.length===4 ? " ("+s[2]+"-"+s[3]+" pens)" : (s[2]==="aet"?" aet":""))) : "not yet confirmed";
+  const posOfP = {}; currRows.forEach((r,i) => posOfP[r.p] = i+1);
   try{
     const data = {
       phase: phase,
-      yesterdays_results: results.map(m => ({match: m.a + " v " + m.b, score: scores[mKey(m)] || "unknown",
-        owners: [TEAM_TO_PLAYER[m.a], TEAM_TO_PLAYER[m.b]]})),
-      table_top5: currRows.slice(0,5).map((r,i) => (i+1) + ". " + r.p + " " + r.Pts + "pts GD" + r.GD),
-      table: currRows.map((r,i) => (i+1) + ". " + r.p + " " + r.Pts + "pts GD" + (r.GD>=0?"+":"") + r.GD),
-      todays_fixtures: todays.map(x => ({match: x.m.a + " v " + x.m.b, time: ukTime(x.ko) + " BST",
-        venue: x.m.g ? venueLabel(x.m.g) : null,
-        sweepstake_duel: (TEAM_TO_PLAYER[x.m.a] || "?") + " vs " + (TEAM_TO_PLAYER[x.m.b] || "?")}))
+      // Each result names BOTH actual teams and the family owner of each, so no other teams get conflated.
+      results: results.map(m => {
+        const s = scores[mKey(m)];
+        return {
+          team_home: m.a, owner_home: TEAM_TO_PLAYER[m.a] || null,
+          team_away: m.b, owner_away: TEAM_TO_PLAYER[m.b] || null,
+          score: fmtScore(s)
+        };
+      }),
+      sweepstake_table: currRows.map((r,i) => ({pos: i+1, player: r.p, played: r.P,
+        won: r.W, drawn: r.D, lost: r.L, gd: r.GD, points: r.Pts})),
+      fixtures: todays.map(x => ({
+        kickoff: ukTime(x.ko) + " BST", venue: x.m.g ? venueLabel(x.m.g) : null,
+        // The ONLY two teams in this fixture, each with the family member who owns it:
+        team_home: x.m.a, owner_home: TEAM_TO_PLAYER[x.m.a] || null,
+        team_away: x.m.b, owner_away: TEAM_TO_PLAYER[x.m.b] || null,
+        owner_home_position: TEAM_TO_PLAYER[x.m.a] ? posOfP[TEAM_TO_PLAYER[x.m.a]] : null,
+        owner_away_position: TEAM_TO_PLAYER[x.m.b] ? posOfP[TEAM_TO_PLAYER[x.m.b]] : null,
+        same_owner: TEAM_TO_PLAYER[x.m.a] && TEAM_TO_PLAYER[x.m.a] === TEAM_TO_PLAYER[x.m.b]
+      }))
     };
-    return await askClaudeText("Write a WhatsApp message (under 220 words, plain text, no markdown) blending a breathless traditional British football commentator with a relentlessly optimistic, folksy, warm-hearted coach: cliche-laden, kind, funny. It is for a family World Cup sweepstake where each person owns teams. IMPORTANT: this is the " + phase + " \u2014 do NOT mention extra time, penalty shootouts, or knockout drama unless phase says knockout. Vary your phrasing; do not repeat the same stock phrase twice. Cover: (1) the recent results with drama, crediting the family owners; (2) the sweepstake table; (3) predictions for the upcoming fixtures framed as head-to-head duels BETWEEN THE FAMILY PLAYERS named in sweepstake_duel, saying what a win could mean for each player\'s position in the table (use the table data). Keep it fun, never mean. Data: " + JSON.stringify(data));
+    const prompt =
+      "You are a top-class football journalist writing the daily round-up for a family World Cup 2026 sweepstake "
+      + "in which each family member owns specific national teams. Write a WhatsApp message in plain text (no markdown, "
+      + "no headers), about 150-220 words, in warm, witty, polished prose \u2014 broadsheet-quality football writing with "
+      + "a light, affectionate touch. Cover three things: (1) the recent results, with a little colour, naming the family "
+      + "owner of each team; (2) how the sweepstake_table looks now; (3) a short preview of each upcoming fixture as a "
+      + "friendly duel between the two family owners, noting what a win would mean for their league position.\n\n"
+      + "STRICT ACCURACY RULES \u2014 follow exactly:\n"
+      + "\u2022 Each fixture has EXACTLY TWO teams: team_home and team_away. Only ever describe those two teams playing each "
+      + "other. NEVER introduce a third team and never mention a player's other teams in the context of a match they are not in.\n"
+      + "\u2022 owner_home owns team_home; owner_away owns team_away. Attribute correctly. If same_owner is true, that one "
+      + "person owns both sides \u2014 say so wittily.\n"
+      + "\u2022 Use only the data provided. Do not invent scores, scorers, or events. If a score is 'not yet confirmed', say results are still coming in.\n"
+      + "\u2022 This is the " + phase + ". Do NOT mention extra time or penalty shootouts unless the phase is the knockout stage.\n"
+      + "\u2022 Vary your language; never repeat a stock phrase. Spell every team and player name exactly as given.\n\n"
+      + "DATA:\n" + JSON.stringify(data);
+    const text = await askClaudeText(prompt);
+    return text.trim() + LEADERBOARD_FOOTER;
   }catch(_){
-    return localCommentary(results, scores, prevRows, currRows, todays, knockout);
+    return localCommentary(results, scores, prevRows, currRows, todays, knockout) + LEADERBOARD_FOOTER;
   }
 }
 
