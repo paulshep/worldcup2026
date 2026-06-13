@@ -540,75 +540,185 @@ async function askClaudeText(prompt){
 
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
-function localCommentary(results, scores, prevRows, currRows, todays){
+/* Anti-repetition picker: within one message, never reuses a template from a given
+   category until that category's pool is exhausted, then reshuffles. */
+function makePicker(){
+  const used = {};
+  return (cat, arr) => {
+    used[cat] = used[cat] || new Set();
+    let avail = arr.map((_, i) => i).filter(i => !used[cat].has(i));
+    if(!avail.length){ used[cat].clear(); avail = arr.map((_, i) => i); }
+    const i = avail[Math.floor(Math.random() * avail.length)];
+    used[cat].add(i);
+    return arr[i];
+  };
+}
+/* Fill {TOKEN} placeholders. */
+const fill = (tpl, v) => tpl.replace(/\{(\w+)\}/g, (_, k) => (v[k] !== undefined && v[k] !== null) ? v[k] : "");
+const ord = n => n + (n%10==1&&n%100!=11?"st":n%10==2&&n%100!=12?"nd":n%10==3&&n%100!=13?"rd":"th");
+const aAn = w => (/^[AEIOUaeiou]/.test(w) ? "an " : "a ") + w;
+
+function localCommentary(results, scores, prevRows, currRows, todays, knockout){
+  const P = makePicker();
   const L = [];
-  L.push(pick([
-    "\ud83c\udf99\ufe0f GOOD EVENING AND WELCOME, wherever in the world you are!",
-    "\ud83c\udf99\ufe0f HELLO AND WELCOME to another unmissable day of this remarkable World Cup!",
-    "\ud83c\udf99\ufe0f WELL. Take a breath, pour the tea \u2014 what a tournament this is turning into!"
+
+  L.push(P("open", [
+    "\ud83c\udf99\ufe0f GOOD EVENING AND WELCOME, wherever in the world you find yourself!",
+    "\ud83c\udf99\ufe0f HELLO AND WELCOME back to the gantry for another helping of this glorious tournament!",
+    "\ud83c\udf99\ufe0f WELL. Pour the tea, dust off the wallchart \u2014 the World Cup waits for no one!",
+    "\ud83c\udf99\ufe0f GOODNESS, what a day of football. Welcome, one and all!",
+    "\ud83c\udf99\ufe0f A very good day to you \u2014 and what a time to be a football family!",
+    "\ud83c\udf99\ufe0f Strap yourselves in. The greatest show on earth rolls on!"
   ]));
   L.push("");
 
+  /* ---------- Results recap ---------- */
+  const scored = results.map(m => ({m, sc: scores[mKey(m)]})).filter(x => x.sc);
   if(results.length === 0){
-    L.push(pick([
-      "Not a ball kicked yesterday \u2014 a chance for tired legs and frayed nerves to recover.",
-      "A rest day yesterday, and frankly, after the football we've seen, we all needed one."
+    L.push(P("rest", [
+      "Not a ball kicked in the last day \u2014 a breather for tired legs and frayed nerves.",
+      "A quiet one, no fixtures to report. Savour the calm; it won't last.",
+      "No football to recap \u2014 which means no one lost ground. Every cloud!"
     ]));
+    L.push("");
   } else {
-    results.forEach(m => {
-      const sc = scores[mKey(m)];
+    // Day talking point from the actual numbers
+    let big = null, fest = null;
+    scored.forEach(({m, sc}) => {
+      const margin = Math.abs(sc[0]-sc[1]), total = sc[0]+sc[1];
+      if(!big || margin > big.margin) big = {m, sc, margin};
+      if(!fest || total > fest.total) fest = {m, sc, total};
+    });
+    if(big && big.margin >= 3){
+      const wTeam = big.sc[0] > big.sc[1] ? big.m.a : big.m.b;
+      L.push(fill(P("point", [
+        "Rout of the day belonged to {T} \u2014 emphatic stuff.",
+        "If you missed {T}, you missed the thrashing of the day.",
+        "{T} turned theirs into a procession. Ruthless."
+      ]), {T: wTeam}));
+      L.push("");
+    } else if(fest && fest.total >= 5){
+      L.push(fill(P("point", [
+        "Goals galore in {A} v {B} \u2014 the neutrals' favourite of the day.",
+        "{A} v {B} had everything. Defences? Optional, apparently."
+      ]), {A: fest.m.a, B: fest.m.b}));
+      L.push("");
+    }
+
+    scored.forEach(({m, sc}) => {
       const p1 = TEAM_TO_PLAYER[m.a], p2 = TEAM_TO_PLAYER[m.b];
-      if(!sc){
-        L.push(m.a + " and " + m.b + " did battle, but word of the final score hasn't reached the gantry yet.");
-        return;
-      }
-      const diff = sc[0] - sc[1];
       const line = teamLabel(m.a) + " " + sc[0] + "\u2013" + sc[1] + " " + teamLabel(m.b) + scoreSuffix(sc);
+      const diff = sc[0] - sc[1];
       let colour;
-      if(sc.length === 4){
+      if(knockout && sc.length === 4){            // penalty shootout (knockouts only)
         const w = sc[2] > sc[3] ? [m.a, p1] : [m.b, p2];
-        colour = pick(["Penalties! You simply could not write it \u2014 and it's " + w[1] + "'s " + w[0] + " holding their nerve from twelve yards.",
-                       "Drama of the very highest order \u2014 " + w[0] + " win the shootout and " + w[1] + " breathes again!"]);
+        colour = fill(P("pens", [
+          "Penalties! You could not write it \u2014 {T} hold their nerve and {PL} can breathe again.",
+          "Drama from twelve yards, and it's {T} through. Spare a thought for the other lot.",
+          "A shootout for the ages \u2014 {T} survive it, {PL} living every kick."
+        ]), {T: w[0], PL: w[1] || "the family"});
+      } else if(knockout && sc[2] === "aet"){      // extra-time winner (knockouts only)
+        const w = diff > 0 ? [m.a, p1] : [m.b, p2];
+        colour = fill(P("aet", [
+          "Settled in extra time \u2014 {T} dig deep, {PL} aging a year in the process.",
+          "It took 120 minutes, but {T} found a way. {PL} exhausted just watching."
+        ]), {T: w[0], PL: w[1] || "the family"});
       } else if(diff === 0){
-        colour = pick(["Honours even, and you'd say neither " + (p1||"") + " nor " + (p2||"") + " will sleep easy.",
-                       "A point apiece \u2014 a proper game of two halves, that."]);
+        const both = (p1 && p2) ? (p1 + " and " + p2) : (p1 || p2 || "both sides");
+        colour = (sc[0] === 0)
+          ? fill(P("draw0", [
+              "Goalless, and goalless it stayed. A point each for {B2}, and not much for the scrapbook.",
+              "Nil-nil. {B2} share the spoils; the chances did not.",
+              "A stalemate \u2014 {B2} cancel each other out. Tidy at the back, blunt up top."
+            ]), {B2: both})
+          : fill(P("drawN", [
+              "Honours even, and end to end with it. {B2} both leave with something.",
+              "A proper ding-dong, finishing level \u2014 {B2} split the difference.",
+              "Shared, and thoroughly entertaining. {B2} will each take the point."
+            ]), {B2: both});
       } else {
         const wTeam = diff > 0 ? m.a : m.b, wPlayer = diff > 0 ? p1 : p2;
-        const margin = Math.abs(diff);
-        colour = margin === 1 ? pick([wTeam + " edge it by the odd goal \u2014 " + wPlayer + " punching the air in the group chat!",
-                                       "Squeaky-bum time right to the end, but " + wTeam + " see it out for " + wPlayer + "."])
-               : margin === 2 ? pick(["Comfortable in the end for " + wTeam + " \u2014 the boy " + wPlayer + " done good.",
-                                       wTeam + " with daylight between the sides \u2014 " + wPlayer + " will take that all day long."])
-               : pick(["AN ABSOLUTE DEMOLITION! " + wTeam + " run riot and " + wPlayer + " is dreaming of the trophy already.",
-                       wTeam + " simply magnificent \u2014 they could have had six! " + wPlayer + " in dreamland."]);
+        const lPlayer = diff > 0 ? p2 : p1;
+        const margin = Math.abs(diff), conceded = Math.min(sc[0], sc[1]) > 0;
+        const v = {T: wTeam, PL: wPlayer || "the family", LP: lPlayer || "the other camp"};
+        colour = margin === 1
+          ? (conceded
+              ? fill(P("win1c", [
+                  "The odd goal in a thriller \u2014 {T} find a way, and {PL} will take it gladly.",
+                  "Nothing in it to the last kick, but {T} edge home. Big exhale from {PL}.",
+                  "Heart-in-mouth stuff \u2014 {T} over the line, {PL} doing their best to look calm."
+                ]), v)
+              : fill(P("win1cs", [
+                  "A clean sheet and the odd goal \u2014 {T} grind it out for {PL}.",
+                  "One goal, none conceded \u2014 unfussy and effective from {T}. {PL} purring."
+                ]), v))
+          : margin === 2
+          ? fill(P("win2", [
+              "A bit to spare for {T} \u2014 {PL} settling in nicely.",
+              "Comfortable in the end; {T} had the measure of it. {PL} will have enjoyed that.",
+              "Two clear goals for {T} \u2014 {PL} off and running, {LP} with work to do."
+            ]), v)
+          : fill(P("win3", [
+              "Goodness me \u2014 {T} ran riot! A statement, and {PL} is dreaming already.",
+              "{T} were irresistible. Party hats for {PL}; commiserations to {LP}.",
+              "A real demolition from {T} \u2014 they could have had more. {PL} in dreamland."
+            ]), v);
       }
-      L.push(line); L.push(colour); L.push("");
+      L.push(line);
+      L.push(colour);
+      L.push("");
+    });
+    // any results still awaiting a confirmed score
+    results.filter(m => !scores[mKey(m)]).forEach(m => {
+      L.push(fill(P("nosc", [
+        "{A} v {B} was played, but the final score hasn't reached the gantry yet.",
+        "Word from {A} v {B} is still coming through \u2014 we'll have it for you soon."
+      ]), {A: m.a, B: m.b}));
+      L.push("");
     });
   }
 
-  /* Table talk */
-  if(currRows[0].Pts > 0){
+  /* ---------- Table talk ---------- */
+  if(currRows[0] && currRows[0].Pts > 0){
     const leader = currRows[0];
-    L.push("AS FOR THE TABLE: make no mistake, " + leader.p + " sits atop the pile \u2014 " + leader.Pts + " points, goal difference " + (leader.GD>=0?"+":"") + leader.GD + ".");
+    L.push(fill(P("lead", [
+      "AT THE TOP: {p} sets the pace \u2014 {pts} points, goal difference {gd}.",
+      "Leading the family this morning, it's {p}: {pts} points and a {gd} goal difference. Take a bow.",
+      "{p} sits proudly on top \u2014 {pts} points to show for it. Long may it last (says everyone else, through gritted teeth)."
+    ]), {p: leader.p, pts: leader.Pts, gd: (leader.GD>=0?"+":"")+leader.GD}));
+
     const prevPos = {}; prevRows.forEach((r,i) => prevPos[r.p] = i);
     let best = null;
-    currRows.forEach((r,i) => {
-      const up = prevPos[r.p] - i;
-      if(up > 0 && (!best || up > best.up)) best = {p:r.p, up};
-    });
-    if(best) L.push("The big mover? " + best.p + ", up " + best.up + " place" + (best.up>1?"s":"") + " overnight \u2014 they'll tell their grandchildren about this.");
+    if(prevRows.some(r => r.Pts > 0)){          // skip movers if nobody had points before (just alphabetical noise)
+      currRows.forEach((r,i) => {
+        if(!(r.p in prevPos)) return;
+        const up = prevPos[r.p] - i;
+        if(up > 0 && (!best || up > best.up)) best = {p:r.p, up};
+      });
+    }
+    if(best){
+      L.push(fill(P("mover", [
+        "Biggest climber? {p}, up {n} {pl} \u2014 get them a cup of tea, they've earned it.",
+        "{p} is the mover of the day, leaping {n} {pl}. Onwards and upwards!",
+        "Quietly surging: {p}, up {n} {pl}. Don't tell them, they'll get cocky."
+      ]), {p: best.p, n: best.up, pl: best.up>1?"places":"place"}));
+    }
     const bottom = currRows[currRows.length-1];
-    if(bottom.P > 0 && bottom.Pts === 0) L.push("And spare a thought for " + bottom.p + ". It's been a baptism of fire, no two ways about it.");
+    if(bottom.P > 0 && bottom.Pts === 0){
+      L.push(fill(P("bottom", [
+        "And a kind word for {p}, propping up the table \u2014 early days, chin up.",
+        "Someone has to be bottom, and today it's {p}. The only way is up, eh?",
+        "{p} will want to forget that one. Plenty of football left, though."
+      ]), {p: bottom.p}));
+    }
     L.push("");
   }
 
-  /* Predictions \u2014 sweepstake grudge matches with table stakes */
-  const posOf = {}; const ptsOf = {};
-  currRows.forEach((r, i) => { posOf[r.p] = i + 1; ptsOf[r.p] = r.Pts; });
-  const ordinal = n => n + (n%10==1&&n%100!=11?"st":n%10==2&&n%100!=12?"nd":n%10==3&&n%100!=13?"rd":"th");
+  /* ---------- Predictions: sweepstake duels with table stakes ---------- */
+  const posOf = {}; currRows.forEach((r, i) => posOf[r.p] = i + 1);
   const climbWithWin = p => {
     const me = currRows.find(r => r.p === p);
-    const hyp = me.Pts + 3, hypGD = me.GD + 1;  // assume a one-goal win
+    const hyp = me.Pts + 3, hypGD = me.GD + 1;
     let newPos = 1;
     currRows.forEach(r => {
       if(r.p === p) return;
@@ -616,44 +726,74 @@ function localCommentary(results, scores, prevRows, currRows, todays){
     });
     return Math.min(newPos, posOf[p]);
   };
-  const an = w => (/^[AEIOUaeiou]/.test(w) ? "an " : "a ") + w;
   if(todays.length > 0){
-    L.push(pick(["RIGHT THEN, TO TODAY'S GRUDGE MATCHES \u2014 and remember, it's only family:",
-                 "AND SO TO TODAY. Two things in life are certain: kick-offs and sibling rivalry:",
-                 "TO THE CRYSTAL BALL \u2014 and folks, believe in something today, even if it's just extra time:"]));
+    L.push(P("predOpen", [
+      "TO TODAY'S FIXTURES \u2014 and a few wholly unscientific predictions:",
+      "AND SO TO TODAY. The family rivalries renew:",
+      "RIGHT, today's grudge matches \u2014 keep it friendly in the group chat:",
+      "TO THE CRYSTAL BALL, then. Squint and you might see the future:"
+    ]));
     todays.forEach(({m, ko}) => {
       const p1 = TEAM_TO_PLAYER[m.a], p2 = TEAM_TO_PLAYER[m.b];
       const head = "\u2022 " + m.a + " v " + m.b + " (" + ukTime(ko) + "): ";
       if(p1 && p2 && p1 === p2){
-        L.push(head + p1 + " owns BOTH teams \u2014 can't lose, can't win, totally zen. We should all live like " + p1 + " today.");
+        L.push(head + fill(P("both", [
+          "{p} owns BOTH sides \u2014 can't lose, can't win, utterly zen. We should all live like {p} today.",
+          "A no-lose, no-win afternoon for {p}, who has both teams. Pure serenity."
+        ]), {p: p1}));
         return;
       }
       if(!p1 || !p2){
-        L.push(head + "knockout territory \u2014 the table holds its breath.");
+        L.push(head + P("placeholder", [
+          "knockout territory \u2014 the table holds its breath.",
+          "a slot still to be filled \u2014 names to follow once the groups settle."
+        ]));
         return;
       }
-      const duel = p1 + " (" + ordinal(posOf[p1]) + ") locks horns with " + p2 + " (" + ordinal(posOf[p2]) + ") in the sweepstake. ";
+      const duel = p1 + " (" + ord(posOf[p1]) + ") meets " + p2 + " (" + ord(posOf[p2]) + ") in the family stakes. ";
       const c1 = climbWithWin(p1), c2 = climbWithWin(p2);
       const stakes = [];
-      if(c1 < posOf[p1]) stakes.push(an(m.a) + " win rockets " + p1 + " up to " + ordinal(c1));
-      if(c2 < posOf[p2]) stakes.push("three points lifts " + p2 + " to " + ordinal(c2));
-      const stakeLine = stakes.length ? stakes.join(", while ") + ". " : "";
-      L.push(head + duel + stakeLine + pick([
-        "My heart says both of you, my head says hydrate and enjoy it.",
-        "I believe in " + pick([p1,p2]) + " today. Heck, I believe in everyone. But mostly " + pick([p1,p2]) + ".",
-        "This one smells like the odd goal and a very smug breakfast for someone.",
-        "Whatever happens, be curious in the group chat, not judgemental.",
-        "Pressure? Pressure is for tyres. Go enjoy yourselves, you two.",
-        "Winner gets bragging rights; loser gets character. Everybody grows."
-      ]));
+      if(c1 < posOf[p1]) stakes.push(aAn(m.a) + " win lifts " + p1 + " to " + ord(c1));
+      if(c2 < posOf[p2]) stakes.push("three points sends " + p2 + " up to " + ord(c2));
+      // if a top-3 player can't climb, frame it as defending their perch
+      if(!stakes.length){
+        const top = posOf[p1] <= posOf[p2] ? p1 : p2;
+        if(posOf[top] <= 3) stakes.push(top + " just wants to protect " + ord(posOf[top]) + " place");
+      }
+      const stakeLine = stakes.length ? (stakes.join(", while ") + ". ").replace(/^./, c => c.toUpperCase()) : "";
+      const kicker = knockout
+        ? P("kickKO", [
+            "No draws here \u2014 someone's tournament ends tonight.",
+            "Win or go home. Hold onto something.",
+            "Sudden-death stuff. May the bravest side prevail."
+          ])
+        : P("kick", [
+            "My heart says both; my head says enjoy the ride.",
+            "Smells like the odd goal and a smug breakfast for somebody.",
+            "Be curious in the group chat, not cruel.",
+            "Pressure's for tyres. Go and enjoy yourselves, you two.",
+            "Winner takes the bragging rights; loser builds character.",
+            "A score draw wouldn't shock me \u2014 and would suit nobody.",
+            "Form goes out the window on days like this.",
+            "Whatever happens, hug it out afterwards."
+          ]);
+      L.push(head + duel + stakeLine + kicker);
     });
   } else {
-    L.push("No football today \u2014 a rest day. Call your mother. Tell her about the goal difference.");
+    L.push(P("noFix", [
+      "No football today \u2014 a rest day. Call your mother. Tell her about the goal difference.",
+      "Nothing on today. A chance to study the table and plot quietly.",
+      "A blank day in the schedule \u2014 use it wisely, recharge the vocal cords."
+    ]));
   }
   L.push("");
-  L.push(pick(["That's all from me. Football \u2014 it's a funny old game. See you tomorrow!",
-               "Right, that's your lot from the gantry. Don't have nightmares about the 3am kick-offs!",
-               "The World Cup waits for no one \u2014 until tomorrow, good night and good football!"]));
+  L.push(P("sign", [
+    "That's your lot from the gantry. It's a funny old game \u2014 see you tomorrow!",
+    "Until next time: mind the late kick-offs and don't have nightmares!",
+    "The World Cup rolls on. Good night, and good football!",
+    "Back tomorrow \u2014 same gantry, same questionable predictions.",
+    "From all of us up here: enjoy every minute. It comes around but once every four years."
+  ]));
   return "\u26bd\ud83c\udf99\ufe0f THE COMMENTARY BOX\n\n" + L.join("\n");
 }
 
@@ -661,17 +801,29 @@ async function buildCommentaryMsg(matches, setStatus){
   const now = new Date();
   const N = now.getTime();
   const {finished, scores} = await gatherAllScores(matches, setStatus);
-  const results = matches.filter(m => inWindow(kickoffUTC(m), N - DAY, N));   // last 24h
+  const results = matches.filter(m => {
+    const ko = kickoffUTC(m);
+    return ko && inWindow(ko, N - DAY, N) && (ko.getTime() + 165*60000) < N;   // finished, last 24h
+  });
   const todays = matches.map(m => ({m, ko: kickoffUTC(m)}))
     .filter(x => inWindow(x.ko, N, N + DAY)).sort((a,b) => a.ko - b.ko);       // next 24h
   const before = finished.filter(m => { const ko = kickoffUTC(m); return ko && ko.getTime() < (N - DAY); });
   const prevRows = computeRows(tallyTable(before, scores));
   const currRows = computeRows(tallyTable(finished, scores));
 
+  // Knockouts begin 28 June 2026; before that there is no extra time or shootout.
+  const KO_START = Date.UTC(2026, 5, 28);
+  const knockout = [...results, ...todays.map(x => x.m)].some(m => {
+    const ko = kickoffUTC(m); return ko && ko.getTime() >= KO_START;
+  });
+  const phase = knockout ? "knockout stage (extra time and penalties possible)"
+                         : "group stage (matches CAN end in a draw; there is NO extra time or penalties)";
+
   /* Prefer Claude-written commentary when the environment allows */
   setStatus("Warming up the commentary box\u2026");
   try{
     const data = {
+      phase: phase,
       yesterdays_results: results.map(m => ({match: m.a + " v " + m.b, score: scores[mKey(m)] || "unknown",
         owners: [TEAM_TO_PLAYER[m.a], TEAM_TO_PLAYER[m.b]]})),
       table_top5: currRows.slice(0,5).map((r,i) => (i+1) + ". " + r.p + " " + r.Pts + "pts GD" + r.GD),
@@ -680,9 +832,9 @@ async function buildCommentaryMsg(matches, setStatus){
         venue: x.m.g ? venueLabel(x.m.g) : null,
         sweepstake_duel: (TEAM_TO_PLAYER[x.m.a] || "?") + " vs " + (TEAM_TO_PLAYER[x.m.b] || "?")}))
     };
-    return await askClaudeText("Write a WhatsApp message (under 220 words, plain text, no markdown) blending a breathless traditional British football commentator with a relentlessly optimistic, folksy, warm-hearted coach: cliche-laden, kind, funny. It is for a family World Cup sweepstake where each person owns teams. Cover: (1) yesterday\'s results with drama, crediting the family owners; (2) the sweepstake table; (3) predictions for today framed as head-to-head duels BETWEEN THE FAMILY PLAYERS named in sweepstake_duel, saying what a win could mean for each player\'s position in the table (use the table data). Keep it fun, never mean. Data: " + JSON.stringify(data));
+    return await askClaudeText("Write a WhatsApp message (under 220 words, plain text, no markdown) blending a breathless traditional British football commentator with a relentlessly optimistic, folksy, warm-hearted coach: cliche-laden, kind, funny. It is for a family World Cup sweepstake where each person owns teams. IMPORTANT: this is the " + phase + " \u2014 do NOT mention extra time, penalty shootouts, or knockout drama unless phase says knockout. Vary your phrasing; do not repeat the same stock phrase twice. Cover: (1) the recent results with drama, crediting the family owners; (2) the sweepstake table; (3) predictions for the upcoming fixtures framed as head-to-head duels BETWEEN THE FAMILY PLAYERS named in sweepstake_duel, saying what a win could mean for each player\'s position in the table (use the table data). Keep it fun, never mean. Data: " + JSON.stringify(data));
   }catch(_){
-    return localCommentary(results, scores, prevRows, currRows, todays);
+    return localCommentary(results, scores, prevRows, currRows, todays, knockout);
   }
 }
 
