@@ -287,3 +287,10 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.2 — Fixed three-team conflation in Claude commentary via explicit per-team owner binding + stricter journalist-grade prompt; appended leaderboard link to all commentary messages.
+
+## Commentary roundup-count fix (v2.3)
+- Bug: Claude-path opened with "Two games down and the tournament is already delivering" \u2014 only 2 games were in the last-24h recap window, but 4 had been played (2 match-days). The model read the recent-results count as the tournament total.
+- Fix: data now passes games_in_this_roundup (last-24h count) AND games_played_in_tournament_total (all finished), with a roundup_note explaining the distinction, and a prompt rule forbidding the model from stating a tournament total from the recent batch or implying the tournament just started. Recap is framed as the latest match-day.
+
+## Change log (cont.)
+- v2.3 — Fixed commentary misstating tournament progress by separating the daily-roundup game count from the tournament total.
