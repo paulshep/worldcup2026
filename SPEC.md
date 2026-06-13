@@ -278,3 +278,12 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.1 — Overhauled the local commentary engine: anti-repetition, richer data-driven phrasing, group-stage correctness (no extra-time references), finished-only recap.
+
+## Commentary accuracy + journalist quality + leaderboard link (v2.2)
+- Bug fixed: the Claude-written path could mangle a fixture into three teams (e.g. "USA face Qatar against Switzerland") because a player owning two teams (Kate: USA + Qatar) was passed only as "Kate vs Jonathan" with no binding to which team was in THIS match. The model grabbed the wrong team.
+- Fix: each fixture (and each result) now passes explicit per-side binding \u2014 team_home/owner_home and team_away/owner_away, plus each owner's table position and a same_owner flag. The prompt was rewritten to broadsheet-football-journalist standard with STRICT accuracy rules: exactly two teams per fixture, never introduce a third team or a player's other teams, attribute owners correctly, use only provided data (no invented scores/events), respect the phase (no extra time/pens in the group stage), vary language, spell names exactly.
+- Leaderboard link appended to EVERY commentary message (both Claude and local paths) via a LEADERBOARD_FOOTER constant: "\ud83d\udcca Full table: https://paulshep.github.io/worldcup2026/leaderboard.html".
+- Verified: fixture data binds Qatar->Kate / Switzerland->Jonathan unambiguously; footer present on local-path output; full app test passes with no errors.
+
+## Change log (cont.)
+- v2.2 — Fixed three-team conflation in Claude commentary via explicit per-team owner binding + stricter journalist-grade prompt; appended leaderboard link to all commentary messages.
