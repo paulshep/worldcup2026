@@ -79,6 +79,7 @@
     <button class="gen" id="btnTomorrow">Tomorrow's matches<small>plan ahead — UK times</small></button>
     <button class="gen" id="btnLeaderboard">Leaderboard<small>played, W-D-L, goal difference</small></button>
     <button class="gen" id="btnCommentary">Commentary<small>the beautiful game, in words</small></button>
+    <button class="gen" id="btnData">Match data<small>what the feed has &amp; when</small></button>
   </div>
   <div class="status" id="status"></div>
 
@@ -882,11 +883,91 @@ async function buildCommentaryMsg(matches, setStatus){
   }
 }
 
+/* ---------- Match-data status (feed diagnostics) ---------- */
+function timeAgo(iso){
+  if(!iso) return "unknown";
+  const ms = Date.now() - new Date(iso).getTime();
+  if(isNaN(ms)) return "unknown";
+  const mins = Math.round(ms/60000);
+  if(mins < 1) return "just now";
+  if(mins < 60) return mins + (mins===1?" min ago":" mins ago");
+  const hrs = Math.round(mins/60);
+  if(hrs < 24) return hrs + (hrs===1?" hour ago":" hours ago");
+  const days = Math.round(hrs/24);
+  return days + (days===1?" day ago":" days ago");
+}
+function ukStamp(iso){
+  if(!iso) return "";
+  try{
+    return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(iso));
+  }catch(_){ return ""; }
+}
+
+async function buildDataStatusMsg(matches, setStatus){
+  setStatus("Checking the feed\u2026");
+  const N = Date.now();
+
+  // Pull the two published artefacts (same-origin on the hosted site).
+  let pub = null, build = null;
+  try{ const r = await fetch("scores.json", {cache:"no-store"}); if(r.ok) pub = await r.json(); }catch(_){}
+  try{ const r = await fetch("build-status.json", {cache:"no-store"}); if(r.ok) build = await r.json(); }catch(_){}
+  const pubScores = (pub && pub.scores) || {};
+
+  const L = [];
+  L.push("\ud83d\udce1 MATCH DATA STATUS");
+  L.push("");
+
+  if(pub){
+    const n = Object.keys(pubScores).length;
+    L.push("Published scores (scores.json): " + timeAgo(pub.updated));
+    L.push("  \u2022 " + ukStamp(pub.updated) + " UK \u00b7 source: " + (pub.source || "?") + " \u00b7 " + n + " game" + (n===1?"":"s") + " scored");
+  } else {
+    L.push("Published scores (scores.json): not reachable");
+    L.push("  \u2022 (only works on the hosted site; the hourly job writes this file)");
+  }
+  if(build){
+    const d = build.diagnostics || {};
+    L.push("Build job last ran: " + timeAgo(build.ran));
+    Object.keys(d).forEach(k => L.push("  \u2022 " + k + ": " + d[k]));
+    if(build.unmatched && build.unmatched.length) L.push("  \u2022 unmatched names: " + build.unmatched.join(", "));
+  }
+  L.push("");
+
+  // Matches in the last 24 hours, with score availability.
+  const window = matches.map(m => ({m, ko: kickoffUTC(m)}))
+    .filter(x => x.ko && inWindow(x.ko, N - DAY, N))
+    .sort((a,b) => a.ko - b.ko);
+
+  L.push("LAST 24 HOURS (" + window.length + " match" + (window.length===1?"":"es") + "):");
+  if(window.length === 0){
+    L.push("  No matches kicked off in the last 24 hours.");
+  } else {
+    window.forEach(({m, ko}) => {
+      const finished = (ko.getTime() + 165*60000) < N;
+      const inPlay = !finished && ko.getTime() < N;
+      const pubHas = pubScores[m.a + "|" + m.b];
+      const liveHas = m.s;   // whatever overlayLive/base resolved
+      let status, score = "";
+      if(pubHas){ status = "\u2705 published"; score = pubHas[0] + "\u2013" + pubHas[1]; }
+      else if(liveHas){ status = "\u2705 in feed (not yet in published file)"; score = liveHas[0] + "\u2013" + liveHas[1]; }
+      else if(inPlay){ status = "\ud83d\udd34 kicking off / in play"; }
+      else if(finished){ status = "\u23f3 finished \u2014 awaiting score"; }
+      else { status = "\u23f1 upcoming"; }
+      const label = teamLabel(m.a) + (score ? " " + score + " " : " v ") + teamLabel(m.b);
+      L.push("  " + label);
+      L.push("     " + ukTime(ko) + " BST \u00b7 " + status);
+    });
+  }
+  L.push("");
+  L.push("Checked just now \u00b7 " + ukStamp(new Date().toISOString()) + " UK");
+  return L.join("\n");
+}
+
 /* ---------- UI wiring ---------- */
 const statusEl = document.getElementById("status");
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
-const btns = [document.getElementById("btnYesterday"), document.getElementById("btnToday"), document.getElementById("btnTomorrow"), document.getElementById("btnLeaderboard"), document.getElementById("btnCommentary")];
+const btns = [document.getElementById("btnYesterday"), document.getElementById("btnToday"), document.getElementById("btnTomorrow"), document.getElementById("btnLeaderboard"), document.getElementById("btnCommentary"), document.getElementById("btnData")];
 const setStatus = s => statusEl.textContent = s;
 
 async function generate(kind){
@@ -905,6 +986,8 @@ async function generate(kind){
     } else if(kind === "leaderboard"){
       const {finished, scores} = await gatherAllScores(matches, setStatus);
       msg = buildLeaderboardMsg(finished, scores, ukNiceDate(now));
+    } else if(kind === "data"){
+      msg = await buildDataStatusMsg(matches, setStatus);
     } else if(kind === "tomorrow"){
       msg = await buildFixturesMsg(matches, N + DAY, N + 2*DAY, setStatus, "TOMORROW");
     } else {
@@ -931,6 +1014,7 @@ btns[1].addEventListener("click", () => generate("today"));
 btns[2].addEventListener("click", () => generate("tomorrow"));
 btns[3].addEventListener("click", () => generate("leaderboard"));
 btns[4].addEventListener("click", () => generate("commentary"));
+btns[5].addEventListener("click", () => generate("data"));
 
 document.getElementById("btnCopy").addEventListener("click", async () => {
   const text = msgEl.textContent;
