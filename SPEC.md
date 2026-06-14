@@ -294,3 +294,10 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.3 — Fixed commentary misstating tournament progress by separating the daily-roundup game count from the tournament total.
+
+## Commentary completeness fix (v2.4)
+- Bug: a finished match (Australia 2-0 Turkey, a late Vancouver kickoff) was omitted from the recap. Causes: (a) openfootball lacked its score at generation time, and (b) the journalist model silently skipped the scoreless game; additionally the strict kickoff+2h45 "finished" buffer could drop a very recently finished match entirely.
+- Fixes: results window now includes a match if it HAS a score (definitely done) OR kickoff+2h45 has passed \u2014 so scored games are never dropped by the buffer. Journalist prompt now requires mentioning EVERY recent_results match, noting "result still to come" for any without a confirmed score instead of skipping it. (The local engine already listed unscored matches.) Once the hourly Action ingests the live 2-0, the real score replaces the placeholder.
+
+## Change log (cont.)
+- v2.4 — Recap no longer drops finished-but-unscored or very-recently-finished matches; journalist must mention every game.
