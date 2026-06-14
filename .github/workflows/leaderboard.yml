@@ -1,8 +1,8 @@
-name: Hourly leaderboard rebuild
+name: Leaderboard rebuild (every 5 min)
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 permissions:
