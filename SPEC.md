@@ -1,5 +1,95 @@
 # Family World Cup 2026 Sweepstake App — Specification
 
+> **Note:** The authoritative description of how the system works *today* is the
+> "CURRENT STATE" section immediately below. Everything after it is a chronological
+> change log (v0.1 → v2.8) kept as history — some early sections describe designs that
+> were later superseded (e.g. the original live-fetch leaderboard, replaced by a static
+> one; early single-source data, replaced by the three-source merge).
+
+---
+
+# CURRENT STATE (v2.8) — authoritative
+
+## What it is
+A family sweepstake companion for the 2026 FIFA World Cup. 24 players each own 2 teams
+(48 total = the full field). Three published pages, hosted free on GitHub Pages from repo
+**paulshep/worldcup2026**:
+- **Message maker** — https://paulshep.github.io/worldcup2026/ (repo `index.html`)
+- **Leaderboard** — https://paulshep.github.io/worldcup2026/leaderboard.html (static, auto-rebuilt)
+- **Bracket** — https://paulshep.github.io/worldcup2026/bracket.html (knockout tree)
+
+## Message-maker app (index.html) — 6 buttons
+Generates copyable WhatsApp text in a chat-bubble UI (green pitch theme). Buttons:
+1. **Yesterday's results** — last 24h, with player + flags + score.
+2. **Today's matches** — next 24h, kickoff times in BST + UK TV channel (group stage).
+3. **Tomorrow's matches** — the following 24h.
+4. **Leaderboard** — full standings as text.
+5. **Commentary** — a warm, witty round-up (results + table + fixture "duels").
+6. **Match data** — feed diagnostics: when scores.json was published, build-job status, and per-match score availability for the last 24h.
+- All time-windowed buttons use **rolling 24-hour windows** (not calendar dates), so a
+  game-day whose late US kickoffs spill into the early-hours UK next day stays together.
+- Pens-win-is-a-win throughout; score format `[a,b]` / `[a,b,"aet"]` / `[a,b,penA,penB]`.
+
+## Commentary engine
+Two tiers: a Claude-written path (only when the app runs somewhere it can reach Anthropic's
+API, i.e. inside Claude) and a local phrase-bank writer (the fallback the hosted site always
+uses). Both: group-stage-correct (no extra-time/penalty language before 28 Jun), accurate
+per-fixture owner binding (no three-team conflation), recap of every finished last-24h match
+(never silently dropped), correct tournament-vs-roundup game counts, anti-repetition, and a
+leaderboard link appended to every message. Scores come from the authoritative scores.json
+(see data architecture), so commentary always matches the leaderboard.
+
+## Leaderboard (leaderboard.html) — static, auto-generated
+Pre-rendered floodlit-night design (podium + 24-row table, shared positions on ties). Has
+**no client-side fetching** — it's rebuilt and committed by the GitHub Action, so it loads
+instantly and can't break. Footer shows last-updated time.
+
+## Bracket (bracket.html) — standalone
+Full 2026 knockout tree (R32 #73–88, R16 89–96, QF 97–100, SF 101–102, 3rd-place 103, Final
+104) from the openfootball slot wiring. Round-tab nav (phone-first). Each tie shows both
+teams (or italic placeholder), the sweepstake owner tags, score + winner highlight, venue/
+date; auto-resolves W##/L## chains as results land. A "Sweepstake survivors" strip shows
+which players still have teams alive (appears once knockouts begin). Currently all
+placeholders (group stage). **Not yet cross-linked** to the leaderboard (deferred).
+
+## Data architecture — three-source freshest-wins merge
+A GitHub Action (`build_leaderboard_action.py`) runs **every 5 minutes** and:
+- Pulls finished results from three feeds and merges them **per match** (union for coverage):
+  **football-data.org** (authoritative primary, key from the `FOOTBALL_API_KEY` Actions
+  secret) > **worldcup26.ir** (keyless real-time, currently flaky) > **openfootball**
+  (keyless, lags). On overlap the more authoritative source wins, so the rebuild self-corrects.
+  Only FINISHED/AWARDED scores accepted; pens parsed.
+- Writes **leaderboard.html** (static), **scores.json** (canonical-team-keyed score map, the
+  bridge the client reads), and **build-status.json** (per-source diagnostics incl.
+  football-data.org's newest `lastUpdated`).
+- Anti-regression guard: never blanks a populated page if all sources come back empty.
+- The message-maker app reads **scores.json** (same-origin, keyless) as its authoritative
+  score source — so it can't expose the football-data.org key, and stays in sync with the
+  leaderboard. Max result lag ≈ 5 min (the rebuild cadence).
+
+## Limits / why these choices
+- football-data.org free: 10 req/min, **no daily cap**; we use 1 call/run. Its backend
+  refreshes ~5-min, matching our cadence. API-Football was rejected (free tier blocks the
+  2026 season). worldcup26.ir is real-time but hobby-hosted (has gone down). openfootball is
+  reliable but ~daily-lagging — fine as a fallback.
+- GitHub Actions: 5-minute cron floor (we're at it); free/unlimited minutes on public repos;
+  "commit only if changed" means frequent runs add no repo noise.
+
+## Security (hard rule)
+**No secrets in the repo or any published file, ever.** The football-data.org key lives only
+in the `FOOTBALL_API_KEY` Actions secret (added by the user directly). The Action commits via
+GitHub's built-in token. Every push in this project was secret-scanned before committing.
+
+## Deferred / future
+- Cross-link leaderboard ↔ bracket (planned for later in the tournament).
+- Knockout-stage UK TV channels (announced ~28 Jun) to embed then.
+- Optionally fold the bracket into the Action as static (only worth it near the knockouts).
+- If worldcup26.ir stays down, it can be dropped — football-data.org + openfootball suffice.
+
+---
+
+# HISTORY (chronological change log, v0.1 → v2.8)
+
 ## Purpose
 A single web page supporting a family sweepstake for the 2026 FIFA World Cup. It generates ready-to-paste text messages for the family WhatsApp chat.
 
