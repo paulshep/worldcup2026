@@ -321,3 +321,11 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.6 — Added football-data.org as authoritative source with a per-match freshest-wins merge across all three feeds; diagnostics expose its lastUpdated freshness.
+
+## football-data.org validated in production (v2.6.1)
+- Renamed env/secret to FOOTBALL_API_KEY to match the secret the user created.
+- First live run (14 Jun 06:53 UTC) result: football-data.org returned 8 finished matches incl. Australia 2-0 Turkey (newest lastUpdated 06:03Z) \u2014 fresher AND more complete than openfootball (7, still missing Australia). worldcup26.ir FAILED this run (DNS/name-resolution error) \u2014 the hobby host was unreachable; football-data.org covered the gap. Merge label "football-data.org+openfootball", 8 games, no unmatched names. Leaderboard rebuilt to 8 matches; Euan (Australia) up to 3rd.
+- Conclusion: football-data.org is the authoritative, reliable primary; the freshest-wins merge means it fills gaps and overrides flaky sources, while worldcup26.ir/openfootball remain as fallbacks. The earlier "missing Australia v Turkey" issue is resolved at the data layer.
+
+## Change log (cont.)
+- v2.6.1 — football-data.org live-validated as freshest/most reliable source (covered for worldcup26.ir outage); secret name aligned to FOOTBALL_API_KEY.
