@@ -301,3 +301,12 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.4 — Recap no longer drops finished-but-unscored or very-recently-finished matches; journalist must mention every game.
+
+## Match-data status button (v2.5)
+- Added a sixth button on the message-maker page, "Match data" (under Commentary), a feed-diagnostics view (not a WhatsApp message).
+- Shows: when scores.json was last published (relative + UK time, source, count of scored games); when the hourly build job last ran with its per-source finished-match counts and any unmatched names; then every match in the last 24 hours with kick-off (BST) and a status badge \u2014 \u2705 published / \u2705 in feed (not yet in published file) / \u23f3 finished, awaiting score / \ud83d\udd34 in play / \u23f1 upcoming.
+- Purpose: makes score-publish lag visible (e.g. a late kickoff like Australia v Turkey showing "awaiting score" explains a commentary omission as a freshness issue, not a bug). Output is copyable for easy debugging.
+- Reads scores.json + build-status.json same-origin (hosted site); degrades gracefully when run locally.
+
+## Change log (cont.)
+- v2.5 — Added "Match data" diagnostics button: published-data freshness + per-match score availability for the last 24h.
