@@ -310,3 +310,14 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.5 — Added "Match data" diagnostics button: published-data freshness + per-match score availability for the last 24h.
+
+## Three-source freshest-wins data merge (v2.6)
+- Added football-data.org as an authoritative source in the hourly Action (GET /v4/competitions/WC/matches, key from FOOTBALL_DATA_KEY secret \u2014 never committed; user rotates the key they pasted in chat).
+- Merge is per-match for maximum freshness: a match counts as soon as ANY source has its confirmed final score (union of openfootball + worldcup26.ir + football-data.org). On overlap the more authoritative source wins, applied in order openfootball (base) -> worldcup26.ir -> football-data.org (last/authoritative), so a flaky source can't override a confirmed authoritative result and the rebuild self-corrects each hour. Only FINISHED/AWARDED scores are accepted; penalties parsed (duration PENALTY_SHOOTOUT).
+- Team names resolved via the existing normalise/alias map (Korea Republic, United States, Cote d'Ivoire, Turkiye, Czechia, Cabo Verde, etc.); any unmatched names surface in build-status.json.
+- Diagnostics: build-status.json now reports football-data.org's finished count AND its newest match lastUpdated timestamp, so the "Match data" button reveals football-data.org's real freshness in production \u2014 letting us empirically confirm whether it beats the others before relying on it.
+- Free-tier note: football-data.org free is 10 req/min (1 call/run, fine) and covers the World Cup; its scores are "delayed" vs paid real-time, but for an hourly rebuild what matters is final-result latency, which the merge measures live. If it underperforms, the other two sources already cover us and it can be removed in one line.
+- Activation: dormant until the FOOTBALL_DATA_KEY secret is added (reports "no key in env" meanwhile; other sources unaffected).
+
+## Change log (cont.)
+- v2.6 — Added football-data.org as authoritative source with a per-match freshest-wins merge across all three feeds; diagnostics expose its lastUpdated freshness.
