@@ -329,3 +329,11 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.6.1 — football-data.org live-validated as freshest/most reliable source (covered for worldcup26.ir outage); secret name aligned to FOOTBALL_API_KEY.
+
+## Commentary now uses the football-data.org-backed scores.json (v2.7)
+- Problem: the commentary/leaderboard-button score path (gatherAllScores) started from a persistent cache (cacheGet "wc26-scores") of earlier web-searched scores. Fresh data only overrode it on overlap, so stale/wrong cached values (e.g. an old Qatar 0-2 vs the real 1-1) and gaps could make the commentary diverge from the now-authoritative leaderboard.
+- Fix: scores.json (football-data.org-backed, refreshed hourly) is now the authoritative base for gatherAllScores. It is re-fetched and mapped from its undated a|b keys to our dated mKey (a|b|d); m.s (already overlaid from scores.json + live in overlayLive) is used first, the fresh fetch backs it up, web-search is a last resort only for genuinely missing finished matches, and the local cache is consulted ONLY if the published file is unreachable and we have nothing. Cache key bumped to wc26-scores-v2 so any poisoned old cache is abandoned.
+- Result: commentary standings/scores now match the leaderboard exactly (verified: poisoned cache 0-2 ignored, scores.json 1-1 used; 8 finished = 8 score entries; top 5 identical to leaderboard). Residual freshness bound is the hourly Action, same as the leaderboard (client can't call football-data.org directly \u2014 key stays server-side).
+
+## Change log (cont.)
+- v2.7 — Commentary scores now sourced authoritatively from the football-data.org-backed scores.json; stale-cache override bug removed (cache key bumped).
