@@ -431,14 +431,29 @@ async function gatherAllScores(matches, setStatus){
     const ko = kickoffUTC(m);
     return ko && (ko.getTime() + 165*60000) < now && FLAGS[m.a] && FLAGS[m.b];
   });
-  const scores = await cacheGet("wc26-scores");
-  finished.forEach(m => { if(m.s) scores[mKey(m)] = m.s; });
 
+  // Authoritative source of truth: the published scores.json (football-data.org-backed, hourly).
+  // overlayLive already applied it to m.s; we also re-fetch here so the commentary always matches
+  // the leaderboard even if the earlier overlay missed, mapping undated scores.json keys to our dated keys.
+  let pub = {};
+  try{ pub = await fetchPublishedScores(); }catch(_){ pub = {}; }
+  const scores = {};
+  finished.forEach(m => {
+    const undated = m.a + "|" + m.b;
+    if(m.s) scores[mKey(m)] = m.s;                       // scores.json + live API (via overlayLive)
+    else if(pub[undated]) scores[mKey(m)] = pub[undated]; // fresh scores.json fetch
+  });
+  // Only if we have nothing at all (published file unreachable) fall back to last-known cache.
+  if(Object.keys(scores).length === 0){
+    try{ Object.assign(scores, await cacheGet("wc26-scores-v2")); }catch(_){}
+  }
+
+  // Last resort: web-search ONLY for finished matches still missing a score.
   let missing = finished.filter(m => !scores[mKey(m)]);
   if(missing.length > 0){
     for(let i = 0; i < missing.length; i += 12){
       const batch = missing.slice(i, i + 12);
-      setStatus("Looking up scores via Claude web search\u2026 (" + Math.min(i+12, missing.length) + "/" + missing.length + ")");
+      setStatus("Looking up the last few scores\u2026 (" + Math.min(i+12, missing.length) + "/" + missing.length + ")");
       try{
         const day = batch.map(m => m.d).filter((v,j,a)=>a.indexOf(v)===j).join(", ");
         const found = await fetchScoresViaClaude(batch, day);
@@ -448,8 +463,9 @@ async function gatherAllScores(matches, setStatus){
         });
       }catch(_){ /* leave missing; they just won't count yet */ }
     }
-    await cacheSet("wc26-scores", scores);
   }
+  // Cache purely as an offline fallback for next time \u2014 never the authoritative base.
+  try{ await cacheSet("wc26-scores-v2", scores); }catch(_){}
   return {finished, scores};
 }
 
