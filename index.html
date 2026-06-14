@@ -804,7 +804,9 @@ async function buildCommentaryMsg(matches, setStatus){
   const {finished, scores} = await gatherAllScores(matches, setStatus);
   const results = matches.filter(m => {
     const ko = kickoffUTC(m);
-    return ko && inWindow(ko, N - DAY, N) && (ko.getTime() + 165*60000) < N;   // finished, last 24h
+    if(!ko || !inWindow(ko, N - DAY, N)) return false;
+    // include if we already have a score (definitely done), or enough time has passed to be finished
+    return !!scores[mKey(m)] || (ko.getTime() + 165*60000) < N;
   });
   const todays = matches.map(m => ({m, ko: kickoffUTC(m)}))
     .filter(x => inWindow(x.ko, N, N + DAY)).sort((a,b) => a.ko - b.ko);       // next 24h
@@ -863,6 +865,8 @@ async function buildCommentaryMsg(matches, setStatus){
       + "\u2022 recent_results are ONLY the games from the last 24 hours. Do NOT imply they are the only games of the "
       + "tournament or state a tournament-wide game count from them \u2014 use games_played_in_tournament_total for any total. "
       + "Frame the recap as the latest match-day, not the start of the tournament (unless the total equals the recent count).\n"
+      + "\u2022 Mention EVERY match listed in recent_results \u2014 do not omit any. For a match whose score is "
+      + "'not yet confirmed', say its result is still to come rather than skipping it.\n"
       + "\u2022 Each fixture has EXACTLY TWO teams: team_home and team_away. Only ever describe those two teams playing each "
       + "other. NEVER introduce a third team and never mention a player's other teams in the context of a match they are not in.\n"
       + "\u2022 owner_home owns team_home; owner_away owns team_away. Attribute correctly. If same_owner is true, that one "
