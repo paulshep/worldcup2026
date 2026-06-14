@@ -337,3 +337,13 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.7 — Commentary scores now sourced authoritatively from the football-data.org-backed scores.json; stale-cache override bug removed (cache key bumped).
+
+## Rebuild frequency increased to every 5 minutes (v2.8)
+- Verified limits (football-data.org official policy docs): free plan = 10 requests/minute, a pure rate limit with NO daily/monthly cap. The Action makes 1 football-data call per run, so even at the max frequency usage is ~0.2 req/min \u2014 far under the limit.
+- football-data.org's own backend recomputes ~every 5 minutes, so its free-tier data granularity is ~5 min; polling faster would be pointless.
+- Binding constraint is GitHub Actions: scheduled workflows can't run more often than every 5 minutes. Set cron to */5 * * * * (was hourly).
+- Cost/noise: GitHub Actions minutes are free/unlimited on public repos; the "commit only if changed" guard means no-op runs make no commits, so higher frequency adds no repo noise. worldcup26.ir/openfootball are hit each run too (fine; worldcup26.ir is a fallback).
+- Effect: max result lag drops from ~60 min to ~5 min for both the leaderboard and the commentary (which reads the same scores.json). GitHub may occasionally delay a scheduled run under load; the next run catches up.
+
+## Change log (cont.)
+- v2.8 — Action frequency increased from hourly to every 5 minutes (GitHub's floor); confirmed well within football-data.org's 10 req/min, no daily cap.
