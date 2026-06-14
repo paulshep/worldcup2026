@@ -93,7 +93,50 @@ def fetch_openfootball():
     return out
 
 DIAG = {}
+
+# ---- authoritative: football-data.org (key from env FOOTBALL_DATA_KEY, a GitHub secret) ----
+def fetch_footballdata():
+    key = os.environ.get("FOOTBALL_DATA_KEY", "").strip()
+    if not key:
+        DIAG["footballdata"] = "no key in env"
+        return [], None
+    url = "https://api.football-data.org/v4/competitions/WC/matches"
+    req = urllib.request.Request(url, headers={"X-Auth-Token": key})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = json.load(r)
+    out, newest = [], None
+    for fx in data.get("matches", []):
+        if fx.get("status") not in ("FINISHED", "AWARDED"):
+            continue
+        a = resolve((fx.get("homeTeam") or {}).get("name"))
+        b = resolve((fx.get("awayTeam") or {}).get("name"))
+        if not a or not b:
+            continue
+        sc = fx.get("score") or {}
+        ft = sc.get("fullTime") or {}
+        if ft.get("home") is None or ft.get("away") is None:
+            continue
+        s = [int(ft["home"]), int(ft["away"])]
+        if sc.get("duration") == "PENALTY_SHOOTOUT":
+            pens = sc.get("penalties") or {}
+            if pens.get("home") is not None and pens.get("away") is not None:
+                s += [int(pens["home"]), int(pens["away"])]
+        out.append({"a": a, "b": b, "s": s})
+        lu = fx.get("lastUpdated")
+        if lu and (newest is None or lu > newest):
+            newest = lu
+    return out, newest
+
 def get_matches():
+    fd, fd_newest = [], None
+    try:
+        fd, fd_newest = fetch_footballdata()
+        if "footballdata" not in DIAG:
+            DIAG["footballdata"] = f"{len(fd)} finished matches" + (f" (newest update {fd_newest})" if fd_newest else "")
+        print(f"football-data.org: {len(fd)} finished matches")
+    except Exception as e:
+        DIAG["footballdata"] = "ERROR: " + str(e)[:200]
+        print("football-data.org failed:", e)
     live, of = [], []
     try:
         live = fetch_live()
@@ -109,11 +152,16 @@ def get_matches():
     except Exception as e:
         DIAG["openfootball"] = "ERROR: " + str(e)[:200]
         print("openfootball failed:", e)
+    # Merge for max freshness: a match counts as soon as ANY source has its final score.
+    # On overlap, the more authoritative source wins (football-data.org > worldcup26.ir > openfootball),
+    # so a flaky source can never override a confirmed authoritative result.
     by_key = {}
-    for m in of:   by_key[m["a"] + "|" + m["b"]] = m   # base
-    for m in live: by_key[m["a"] + "|" + m["b"]] = m   # live wins
+    for m in of:   by_key[m["a"] + "|" + m["b"]] = m   # least authoritative base
+    for m in live: by_key[m["a"] + "|" + m["b"]] = m   # real-time overlay
+    for m in fd:   by_key[m["a"] + "|" + m["b"]] = m   # authoritative wins
     merged = list(by_key.values())
-    source = "worldcup26.ir" if live else ("openfootball" if of else "none")
+    contributors = [name for name, lst in (("football-data.org", fd), ("worldcup26.ir", live), ("openfootball", of)) if lst]
+    source = "+".join(contributors) if contributors else "none"
     return merged, source
 
 # ---- standings ----
