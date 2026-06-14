@@ -94,9 +94,9 @@ def fetch_openfootball():
 
 DIAG = {}
 
-# ---- authoritative: football-data.org (key from env FOOTBALL_DATA_KEY, a GitHub secret) ----
+# ---- authoritative: football-data.org (key from env FOOTBALL_API_KEY, a GitHub secret) ----
 def fetch_footballdata():
-    key = os.environ.get("FOOTBALL_DATA_KEY", "").strip()
+    key = os.environ.get("FOOTBALL_API_KEY", "").strip()
     if not key:
         DIAG["footballdata"] = "no key in env"
         return [], None
