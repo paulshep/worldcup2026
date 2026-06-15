@@ -243,7 +243,7 @@ def build_html(rows, played, css):
   <div id="board" class="board">{board}</div>
   <div class="foot">
     <div class="legend">3 pts win &middot; 1 pt draw &middot; pens = win</div>
-    <div class="refresh"><span id="stamp">Updated {updated} &middot; refreshed daily</span></div>
+    <div class="refresh"><span id="stamp">Updated {updated} &middot; auto-refreshed</span></div>
   </div>
 </div>
 </body>
