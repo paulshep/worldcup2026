@@ -1,11 +1,11 @@
 {
- "ran": "2026-06-18T00:15:23+00:00",
+ "ran": "2026-06-18T05:16:58+00:00",
  "diagnostics": {
-  "footballdata": "21 finished matches (newest update 2026-06-17T22:05:39Z)",
-  "worldcup26": "ERROR: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)>",
-  "openfootball": "22 finished matches"
+  "footballdata": "22 finished matches (newest update 2026-06-18T04:09:40Z)",
+  "worldcup26": "24 finished matches",
+  "openfootball": "24 finished matches"
  },
- "played": 22,
+ "played": 24,
  "unmatched": [
   "Cape Verde Islands"
  ]
