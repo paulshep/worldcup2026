@@ -1,8 +1,8 @@
 {
- "ran": "2026-06-18T12:52:45+00:00",
+ "ran": "2026-06-18T16:31:21+00:00",
  "diagnostics": {
   "footballdata": "23 finished matches (newest update 2026-06-18T08:25:01Z)",
-  "worldcup26": "24 finished matches",
+  "worldcup26": "ERROR: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)>",
   "openfootball": "24 finished matches"
  },
  "played": 24,
