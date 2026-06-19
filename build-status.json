@@ -1,8 +1,8 @@
 {
- "ran": "2026-06-19T15:14:00+00:00",
+ "ran": "2026-06-19T17:27:47+00:00",
  "diagnostics": {
   "footballdata": "27 finished matches (newest update 2026-06-19T03:25:00Z)",
-  "worldcup26": "ERROR: HTTP Error 500: Internal Server Error",
+  "worldcup26": "28 finished matches",
   "openfootball": "28 finished matches"
  },
  "played": 28,
