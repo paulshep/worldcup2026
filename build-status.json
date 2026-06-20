@@ -1,11 +1,11 @@
 {
- "ran": "2026-06-20T01:33:00+00:00",
+ "ran": "2026-06-20T06:03:36+00:00",
  "diagnostics": {
-  "footballdata": "29 finished matches (newest update 2026-06-20T00:08:52Z)",
-  "worldcup26": "30 finished matches",
-  "openfootball": "30 finished matches"
+  "footballdata": "31 finished matches (newest update 2026-06-20T05:13:40Z)",
+  "worldcup26": "32 finished matches",
+  "openfootball": "32 finished matches"
  },
- "played": 30,
+ "played": 32,
  "unmatched": [
   "Cape Verde Islands"
  ]
