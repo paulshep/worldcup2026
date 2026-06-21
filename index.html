@@ -213,6 +213,19 @@ function windowLabel(kos){
 
 /* ---------- Formatting ---------- */
 const teamLabel = n => (FLAGS[n] ? FLAGS[n] + " " + n : n);
+
+/* Append each country's flag immediately after every mention of its name (for commentary).
+   Longest names first so "South Korea" is handled before any short substring; the negative
+   lookahead prevents adding a second flag where one is already present. */
+const FLAG_NAMES = Object.keys(FLAGS).sort((a,b) => b.length - a.length);
+function withFlags(text){
+  for(const name of FLAG_NAMES){
+    const flag = FLAGS[name];
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    text = text.replace(new RegExp(esc + "(?!\\uFE0F|\\s*" + flag + ")", "g"), name + " " + flag);
+  }
+  return text;
+}
 const venueLabel = g => g ? g.replace(/\s*\(.*\)\s*$/, "") : "";
 function playerNote(t1, t2){
   const p1 = TEAM_TO_PLAYER[t1], p2 = TEAM_TO_PLAYER[t2];
@@ -580,8 +593,10 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout){
   const P = makePicker();
   const L = [];
 
+  const ukHour = parseInt(new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"numeric",hour12:false}).format(new Date()), 10);
+  const greeting = ukHour < 12 ? "GOOD MORNING" : (ukHour < 18 ? "GOOD AFTERNOON" : "GOOD EVENING");
   L.push(P("open", [
-    "\ud83c\udf99\ufe0f GOOD EVENING AND WELCOME, wherever in the world you find yourself!",
+    "\ud83c\udf99\ufe0f " + greeting + " AND WELCOME, wherever in the world you find yourself!",
     "\ud83c\udf99\ufe0f HELLO AND WELCOME back to the gantry for another helping of this glorious tournament!",
     "\ud83c\udf99\ufe0f WELL. Pour the tea, dust off the wallchart \u2014 the World Cup waits for no one!",
     "\ud83c\udf99\ufe0f GOODNESS, what a day of football. Welcome, one and all!",
@@ -625,7 +640,7 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout){
 
     scored.forEach(({m, sc}) => {
       const p1 = TEAM_TO_PLAYER[m.a], p2 = TEAM_TO_PLAYER[m.b];
-      const line = teamLabel(m.a) + " " + sc[0] + "\u2013" + sc[1] + " " + teamLabel(m.b) + scoreSuffix(sc);
+      const line = m.a + " " + sc[0] + "\u2013" + sc[1] + " " + m.b + scoreSuffix(sc);
       const diff = sc[0] - sc[1];
       let colour;
       if(knockout && sc.length === 4){            // penalty shootout (knockouts only)
@@ -807,8 +822,8 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout){
   L.push("");
   L.push(P("sign", [
     "That's your lot from the gantry. It's a funny old game \u2014 see you tomorrow!",
-    "Until next time: mind the late kick-offs and don't have nightmares!",
-    "The World Cup rolls on. Good night, and good football!",
+    "Until next time: mind those late kick-offs!",
+    "The World Cup rolls on. Until next time, and good football!",
     "Back tomorrow \u2014 same gantry, same questionable predictions.",
     "From all of us up here: enjoy every minute. It comes around but once every four years."
   ]));
@@ -890,12 +905,14 @@ async function buildCommentaryMsg(matches, setStatus){
       + "person owns both sides \u2014 say so wittily.\n"
       + "\u2022 Use only the data provided. Do not invent scores, scorers, or events. If a score is 'not yet confirmed', say results are still coming in.\n"
       + "\u2022 This is the " + phase + ". Do NOT mention extra time or penalty shootouts unless the phase is the knockout stage.\n"
+      + "\u2022 It is currently the " + (function(){var h=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',hour:'numeric',hour12:false}).format(new Date()),10);return h<12?'morning':(h<18?'afternoon':'evening');})() + " in the UK. If you greet, greet for THAT time of day and never reference a different one (no 'good evening' in the morning).\n"
+      + "\u2022 After EVERY mention of a country/team name, put its flag emoji immediately after the name (e.g. 'Mexico \ud83c\uddf2\ud83c\uddfd'). Do this for every occurrence.\n"
       + "\u2022 Vary your language; never repeat a stock phrase. Spell every team and player name exactly as given.\n\n"
       + "DATA:\n" + JSON.stringify(data);
     const text = await askClaudeText(prompt);
-    return text.trim() + LEADERBOARD_FOOTER;
+    return withFlags(text.trim()) + LEADERBOARD_FOOTER;
   }catch(_){
-    return localCommentary(results, scores, prevRows, currRows, todays, knockout) + LEADERBOARD_FOOTER;
+    return withFlags(localCommentary(results, scores, prevRows, currRows, todays, knockout)) + LEADERBOARD_FOOTER;
   }
 }
 
