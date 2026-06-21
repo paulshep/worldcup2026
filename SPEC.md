@@ -437,3 +437,11 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.8 — Action frequency increased from hourly to every 5 minutes (GitHub's floor); confirmed well within football-data.org's 10 req/min, no daily cap.
+
+## Commentary: time-aware greeting + flags after every country (v2.9)
+- Greeting now reflects the actual UK time of day: GOOD MORNING/AFTERNOON/EVENING computed from Europe/London hour (was hard-coded "GOOD EVENING"). Night-specific sign-offs ("Good night", "nightmares") made time-neutral. The Claude-written path is told the current UK time-of-day and instructed to greet accordingly and never reference a different one.
+- Every country/team mention is now followed by its flag emoji. New withFlags() post-processor appends each country's flag after every occurrence (longest names first to avoid partial matches; negative lookahead prevents double-flagging; handles tag-sequence flags like Scotland). Applied to BOTH commentary paths; the local scoreline switched from leading-flag to bare names so flags are uniform/trailing. Claude path also instructed to add trailing flags.
+- Verified: morning/afternoon/evening greetings correct; flags appear in scorelines, colour prose, table talk and predictions; Scotland tag-flag works; no double flags; full app test passes, no errors.
+
+## Change log (cont.)
+- v2.9 — Commentary greeting is now time-of-day aware (UK), and every country mention is followed by its flag emoji (both writer paths).
