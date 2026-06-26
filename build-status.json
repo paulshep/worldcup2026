@@ -1,8 +1,8 @@
 {
- "ran": "2026-06-26T22:36:13+00:00",
+ "ran": "2026-06-26T23:46:47+00:00",
  "diagnostics": {
   "footballdata": "60 finished matches (newest update 2026-06-26T21:10:58Z)",
-  "worldcup26": "ERROR: <urlopen error [Errno -3] Temporary failure in name resolution>",
+  "worldcup26": "62 finished matches",
   "openfootball": "62 finished matches"
  },
  "played": 62,
