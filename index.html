@@ -80,6 +80,7 @@
     <button class="gen" id="btnLeaderboard">Leaderboard<small>played, W-D-L, goal difference</small></button>
     <button class="gen" id="btnCommentary">Commentary<small>the beautiful game, in words</small></button>
     <button class="gen" id="btnData">Match data<small>what the feed has &amp; when</small></button>
+    <button class="gen" id="btnGroups">Group stage<small>player-by-player, who's through</small></button>
   </div>
   <div class="status" id="status"></div>
 
@@ -996,11 +997,99 @@ async function buildDataStatusMsg(matches, setStatus){
   return L.join("\n");
 }
 
+/* ---------- Group stage summary (player by player) ---------- */
+/* Groups aren't labelled in the fixture data, but the first 72 fixtures run in blocks of
+   6 (one group each, A-L). We compute each group's table from the published scores and
+   apply the 2026 rules: top 2 per group qualify, plus the 8 best third-placed teams
+   (only decidable once every group has finished). Honest while games are outstanding. */
+function wcGroups(){
+  const groups = [];
+  for(let i = 0; i < 12; i++){
+    const block = EMBEDDED_MATCHES.slice(i*6, i*6 + 6);
+    const teams = [...new Set(block.flatMap(m => [m.a, m.b]))];
+    groups.push({ letter: String.fromCharCode(65 + i), teams, games: block });
+  }
+  return groups;
+}
+
+async function buildGroupSummaryMsg(matches, setStatus){
+  setStatus("Tallying the groups\u2026");
+  let pub = {};
+  try{ pub = await fetchPublishedScores(); }catch(_){}
+  matches.forEach(m => { if(m.s) pub[m.a + "|" + m.b] = m.s; });
+
+  const teamInfo = {};   // team -> {letter,pos,rec,complete}
+  const thirds = [];
+  let allComplete = true;
+
+  wcGroups().forEach(G => {
+    const tbl = {}; G.teams.forEach(t => tbl[t] = {team:t, P:0, W:0, D:0, L:0, GF:0, GA:0});
+    let played = 0;
+    G.games.forEach(g => {
+      let s = pub[g.a + "|" + g.b];
+      if(!s && pub[g.b + "|" + g.a]){ const r = pub[g.b + "|" + g.a]; s = [r[1], r[0]]; }
+      if(!s) return;
+      played++;
+      const A = tbl[g.a], B = tbl[g.b], ga = s[0], gb = s[1];
+      A.P++; B.P++; A.GF += ga; A.GA += gb; B.GF += gb; B.GA += ga;
+      if(ga > gb){ A.W++; B.L++; } else if(ga < gb){ B.W++; A.L++; } else { A.D++; B.D++; }
+    });
+    const rows = Object.values(tbl)
+      .map(r => ({...r, GD: r.GF - r.GA, Pts: r.W*3 + r.D}))
+      .sort((a,b) => b.Pts - a.Pts || b.GD - a.GD || b.GF - a.GF || a.team.localeCompare(b.team));
+    const complete = played === 6;
+    if(!complete) allComplete = false;
+    rows.forEach((r, idx) => { teamInfo[r.team] = {letter: G.letter, pos: idx + 1, rec: r, complete}; });
+    if(complete) thirds.push({team: rows[2].team, rec: rows[2]});
+  });
+
+  const bestThirds = new Set();
+  if(allComplete){
+    thirds.slice()
+      .sort((a,b) => b.rec.Pts - a.rec.Pts || b.rec.GD - a.rec.GD || b.rec.GF - a.rec.GF || a.team.localeCompare(b.team))
+      .slice(0, 8).forEach(x => bestThirds.add(x.team));
+  }
+
+  function status(team){
+    const info = teamInfo[team];
+    if(!info) return {through:false, line:"no group data yet"};
+    const {letter, pos, rec, complete} = info;
+    const recStr = "P" + rec.P + ", " + rec.Pts + "pt" + (rec.Pts === 1 ? "" : "s") + ", GD " + (rec.GD > 0 ? "+" : "") + rec.GD;
+    if(!complete) return {through:false, line: ord(pos) + " in Group " + letter + " so far (" + recStr + ")"};
+    if(pos === 1) return {through:true, line:"\u2705 THROUGH as Group " + letter + " winners (" + recStr + ")"};
+    if(pos === 2) return {through:true, line:"\u2705 THROUGH as Group " + letter + " runners-up (" + recStr + ")"};
+    if(pos === 3){
+      if(!allComplete) return {through:false, line:"3rd in Group " + letter + " (" + recStr + ") \u2014 best-third spot still to be decided"};
+      if(bestThirds.has(team)) return {through:true, line:"\u2705 THROUGH as one of the best third-placed teams (" + recStr + ")"};
+      return {through:false, line:"\u274c OUT \u2014 3rd in Group " + letter + ", missed the best-thirds cut (" + recStr + ")"};
+    }
+    return {through:false, line:"\u274c OUT \u2014 bottom of Group " + letter + " (" + recStr + ")"};
+  }
+
+  const L = [];
+  L.push("\ud83c\udfc6 GROUP STAGE \u2014 PLAYER BY PLAYER");
+  if(!allComplete) L.push("(group stage still in progress \u2014 some places undecided)");
+  L.push("");
+  let totalThrough = 0, bothThrough = 0, oneThrough = 0;
+  PLAYERS.slice().sort((a,b) => a[0].localeCompare(b[0])).forEach(([name, teams]) => {
+    const st = teams.map(t => ({t, ...status(t)}));
+    const n = st.filter(x => x.through).length;
+    totalThrough += n;
+    if(n === 2) bothThrough++; else if(n === 1) oneThrough++;
+    L.push(name + " \u2014 " + n + " of 2 through");
+    st.forEach(x => L.push("  \u2022 " + x.t + ": " + x.line));
+    L.push("");
+  });
+  L.push("\ud83d\udcca " + totalThrough + " sweepstake teams through" + (allComplete ? "" : " so far") + " \u00b7 " + bothThrough + " player" + (bothThrough===1?"":"s") + " with both alive, " + oneThrough + " with one.");
+  if(!allComplete) L.push("Once every group has finished, the eight best third-placed teams are confirmed and this fills in fully.");
+  return withFlags(L.join("\n"));
+}
+
 /* ---------- UI wiring ---------- */
 const statusEl = document.getElementById("status");
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
-const btns = [document.getElementById("btnYesterday"), document.getElementById("btnToday"), document.getElementById("btnTomorrow"), document.getElementById("btnLeaderboard"), document.getElementById("btnCommentary"), document.getElementById("btnData")];
+const btns = [document.getElementById("btnYesterday"), document.getElementById("btnToday"), document.getElementById("btnTomorrow"), document.getElementById("btnLeaderboard"), document.getElementById("btnCommentary"), document.getElementById("btnData"), document.getElementById("btnGroups")];
 const setStatus = s => statusEl.textContent = s;
 
 async function generate(kind){
@@ -1021,6 +1110,8 @@ async function generate(kind){
       msg = buildLeaderboardMsg(finished, scores, ukNiceDate(now));
     } else if(kind === "data"){
       msg = await buildDataStatusMsg(matches, setStatus);
+    } else if(kind === "groups"){
+      msg = await buildGroupSummaryMsg(matches, setStatus);
     } else if(kind === "tomorrow"){
       msg = await buildFixturesMsg(matches, N + DAY, N + 2*DAY, setStatus, "TOMORROW");
     } else {
@@ -1048,6 +1139,7 @@ btns[2].addEventListener("click", () => generate("tomorrow"));
 btns[3].addEventListener("click", () => generate("leaderboard"));
 btns[4].addEventListener("click", () => generate("commentary"));
 btns[5].addEventListener("click", () => generate("data"));
+btns[6].addEventListener("click", () => generate("groups"));
 
 document.getElementById("btnCopy").addEventListener("click", async () => {
   const text = msgEl.textContent;
