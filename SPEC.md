@@ -445,3 +445,13 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v2.9 — Commentary greeting is now time-of-day aware (UK), and every country mention is followed by its flag emoji (both writer paths).
+
+## Group stage summary button (v3.0)
+- New "Group stage" button on the message-maker page: a player-by-player WhatsApp summary of how each player's two teams have done and how many are through to the knockouts.
+- Groups (A-L) are derived from the fixture list (first 72 games run in blocks of 6 = one group each), since the feed doesn't label groups and the knockout fixtures are still placeholder-coded. Each group's table is computed from the published scores (Pts, then GD, then GF; head-to-head not modelled - a reasonable approximation for a family pool).
+- Qualification uses the real 2026 rules: top 2 of each completed group go through; once ALL groups are complete the 8 best third-placed teams are ranked and confirmed (24 + 8 = 32). Degrades honestly while games are outstanding: in-progress groups show "Nth so far", third-placed teams in finished groups show "best-third spot still to be decided" until everything is done.
+- Per player: "N of 2 through" plus a status line per team (THROUGH as winners/runners-up / best third-placed; OUT; or current position). Footer totals confirmed qualifiers and players with both/one alive. withFlags() applied so every country gets its flag.
+- Verified: group letters/membership correct; all-complete simulation yields exactly 32 through (24 top-2 + 8 best thirds), 4 thirds miss the cut; no errors in full app test.
+
+## Change log (cont.)
+- v3.0 — Added "Group stage" player-by-player summary button (group tables + 2026 top-2 + best-8-thirds qualification, progressive while group stage incomplete).
