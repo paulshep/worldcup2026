@@ -1066,6 +1066,61 @@ async function buildGroupSummaryMsg(matches, setStatus){
     return {through:false, line:"\u274c OUT \u2014 bottom of Group " + letter + " (" + recStr + ")"};
   }
 
+  // Wry one-line verdict per player, in the spirit of the Commentary button.
+  const say = makePicker();
+  function colourLine(name, st){
+    const undecided = st.filter(x => { const i = teamInfo[x.t]; return i && !i.complete; });
+    const through = st.filter(x => x.through);
+    if(undecided.length){
+      return say("g_prov", [
+        "Jury's still out on " + name + " \u2014 " + through.length + " safely through, the rest still to be settled.",
+        name + "'s fate hangs in the balance: " + through.length + " in, games left to play.",
+        "Too close to call for " + name + " yet \u2014 " + through.length + " through, the nerves jangling on the others."
+      ]);
+    }
+    const win = through.map(x => x.t);
+    const out = st.filter(x => !x.through).map(x => x.t);
+    if(through.length === 2){
+      const bothWon = st.every(x => teamInfo[x.t] && teamInfo[x.t].pos === 1);
+      const anyThird = st.some(x => teamInfo[x.t] && teamInfo[x.t].pos === 3);
+      const topScore = Math.max(...st.map(x => teamInfo[x.t].rec.Pts));
+      if(bothWon) return say("g_bothtop", [
+        name + " is the one to fear \u2014 both teams topped their groups and stroll into the last 32.",
+        "Sit up and take notice: " + name + " has both teams through as group winners. Ominous.",
+        "A flawless group stage for " + name + " \u2014 two teams, two group titles, zero worries.",
+        name + " could hardly have scripted it better: both sides win their groups and march on."
+      ]);
+      if(anyThird) return say("g_bothmix", [
+        name + " gets the pair through, though one needed the best-thirds lifeboat \u2014 nobody's asking how, only how many.",
+        "Both of " + name + "'s teams sneak into the knockouts, one clinging on as a best third. Through is through.",
+        name + " rides their luck a little, but two teams into the last 32 is two teams into the last 32.",
+        "Not always pretty, but effective \u2014 " + name + " has both teams safely over the line."
+      ]);
+      return say("g_both", [
+        "A serene group stage for " + name + " \u2014 both teams through with the minimum of fuss.",
+        "Two in, none out: " + name + " is quietly having a wonderful tournament.",
+        name + " banks both teams into the Round of 32 \u2014 a fine couple of weeks' work.",
+        "Smiles all round for " + name + ": both teams march on" + (topScore >= 7 ? ", and in some style" : "") + "."
+      ]);
+    }
+    if(through.length === 1){
+      return say("g_one", [
+        "A mixed bag for " + name + ": " + win[0] + " march on while " + out[0] + " pack their bags.",
+        name + " keeps a foot in the door \u2014 " + win[0] + " through, " + out[0] + " out.",
+        "One up, one down for " + name + ": " + win[0] + " survive, " + out[0] + " bow out.",
+        name + " salvages one from two \u2014 " + win[0] + " into the knockouts, " + out[0] + " heading home.",
+        "Half a celebration for " + name + ": " + win[0] + " carry the torch, " + out[0] + " are done."
+      ]);
+    }
+    return say("g_none", [
+      "A group stage to forget for " + name + " \u2014 both teams out at the first hurdle. There's always next time.",
+      "No survivors for " + name + ": " + out[0] + " and " + out[1] + " both bow out. Chin up.",
+      name + "'s tournament is, regrettably, run \u2014 both teams eliminated.",
+      "Curtains for " + name + " \u2014 " + out[0] + " and " + out[1] + " head home together.",
+      "Not " + name + "'s year: both teams fall in the groups. The bar awaits."
+    ]);
+  }
+
   const L = [];
   L.push("\ud83c\udfc6 GROUP STAGE \u2014 PLAYER BY PLAYER");
   if(!allComplete) L.push("(group stage still in progress \u2014 some places undecided)");
@@ -1077,6 +1132,7 @@ async function buildGroupSummaryMsg(matches, setStatus){
     totalThrough += n;
     if(n === 2) bothThrough++; else if(n === 1) oneThrough++;
     L.push(name + " \u2014 " + n + " of 2 through");
+    L.push("  _" + colourLine(name, st) + "_");
     st.forEach(x => L.push("  \u2022 " + x.t + ": " + x.line));
     L.push("");
   });
