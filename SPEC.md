@@ -473,3 +473,11 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v3.2 — Added knockouts.json (resolved bracket from football-data.org) and client overlayKnockouts(); knockout commentary/fixtures now name real teams, group button confirms via R32.
+
+## Knockout source robustness (v3.3)
+- Investigation: at the close of the group stage, NO provider had the full Round of 32 resolved. openfootball had ~3 of 16; football-data.org fluctuated 0-4 (it was observed dropping resolved ties back to 0 as the official best-third-placed slot assignment was being finalised). Later rounds are unresolvable until earlier ties are played.
+- Problem this exposed: knockouts.json mirrored the live feed, so resolved ties could disappear when a feed momentarily dropped them.
+- Fix: knockouts.json is now a UNION of football-data.org (authoritative) + openfootball, merged keyed by kick-off instant, and STICKY/anti-regression - it reads the previously published file and retains already-resolved ties (a resolved tie is factual and must not regress), lets openfootball fill gaps, and lets football-data overwrite teams + refresh scores. openfootball knockout times are converted to a UTC instant via the embedded "UTC±X" offset. Result: the file only accumulates toward the full 16 and survives feed churn (verified: retained all 4 ties when football-data returned 0).
+
+## Change log (cont.)
+- v3.3 — knockouts.json hardened: union of both feeds + sticky anti-regression so resolved ties never disappear during the post-group-stage bracket churn.
