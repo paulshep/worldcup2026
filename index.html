@@ -348,14 +348,28 @@ function deterministicR32(matches, pub){
   if(!allComplete) return;                          // only resolve once every group is final
   const thirdMap = ANNEX_C[thirdGroups.join("")];
   if(!thirdMap) return;                             // unfamiliar combination — leave it to the feed
+  const win = c => table[c[1]] ? table[c[1]][c[0] === "1" ? 0 : 1] : null;
+  // Resolve every R32 slot from the EMBEDDED structure (which always carries the 2A/1E/3.. codes),
+  // keyed by kick-off INSTANT. The instant is stable across feeds, so this corrects a fixture no
+  // matter where `matches` came from (our EMBEDDED codes OR a stale openfootball placeholder).
+  const byInstant = {};
+  EMBEDDED_MATCHES.forEach(slot => {
+    if(slot.d < "2026-06-28" || slot.d > "2026-07-03") return;            // R32 window only
+    if(!(_isWin(slot.a) || _isThird(slot.a)) && !(_isWin(slot.b) || _isThird(slot.b))) return;
+    let a = slot.a, b = slot.b;
+    if(_isWin(slot.a)) a = win(slot.a) || a;
+    if(_isWin(slot.b)) b = win(slot.b) || b;
+    if(_isThird(slot.a) && _isWin(slot.b)){ const tg = thirdMap[slot.b[1]]; if(tg && table[tg]) a = table[tg][2]; }
+    if(_isThird(slot.b) && _isWin(slot.a)){ const tg = thirdMap[slot.a[1]]; if(tg && table[tg]) b = table[tg][2]; }
+    if(!(FLAGS[a] && FLAGS[b])) return;
+    const ko = kickoffUTC(slot);
+    if(ko) byInstant[ko.getTime()] = [a, b];
+  });
   matches.forEach(m => {
-    if(FLAGS[m.a] && FLAGS[m.b]) return;            // already real (feed resolved it)
-    let a = m.a, b = m.b;
-    if(_isWin(m.a) && table[m.a[1]]) a = table[m.a[1]][m.a[0] === "1" ? 0 : 1];
-    if(_isWin(m.b) && table[m.b[1]]) b = table[m.b[1]][m.b[0] === "1" ? 0 : 1];
-    if(_isThird(m.a) && _isWin(m.b)){ const tg = thirdMap[m.b[1]]; if(tg && table[tg]) a = table[tg][2]; }
-    if(_isThird(m.b) && _isWin(m.a)){ const tg = thirdMap[m.a[1]]; if(tg && table[tg]) b = table[tg][2]; }
-    if(FLAGS[a] && FLAGS[b]){ m.a = a; m.b = b; }
+    if(FLAGS[m.a] && FLAGS[m.b]) return;            // already real (feed/openfootball resolved it)
+    const ko = kickoffUTC(m);
+    const r = ko && byInstant[ko.getTime()];
+    if(r){ m.a = r[0]; m.b = r[1]; }
   });
 }
 
@@ -379,6 +393,14 @@ async function overlayKnockouts(matches){
     let pub = {};
     try{ pub = await fetchPublishedScores(); }catch(_){}
     matches.forEach(m => { if(m.s) pub[m.a + "|" + m.b] = m.s; });
+    // If the published file and live feeds were both empty, fall back to last-known cached
+    // scores (dated keys a|b|d -> undated a|b) so the bracket still resolves after a hiccup.
+    if(Object.keys(pub).length === 0){
+      try{
+        const cached = await cacheGet("wc26-scores-v2");
+        Object.keys(cached || {}).forEach(k => { const p = k.split("|"); if(p.length >= 2) pub[p[0] + "|" + p[1]] = cached[k]; });
+      }catch(_){}
+    }
     deterministicR32(matches, pub);
   }catch(_){}
   // Safety: drop any exact duplicate knockout fixture (same date + teams) the feed appended.
