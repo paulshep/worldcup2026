@@ -298,8 +298,70 @@ async function fetchKnockouts(){
     return (j.fixtures || []).filter(f => f.utc && FLAGS[f.a] && FLAGS[f.b]);
   }catch(_){ return []; }
 }
+/* ---------- Deterministic Round-of-32 resolution from our own group tables ----------
+   Winner / runner-up slots resolve straight from the standings. Best-third slots use
+   FIFA's official Annex C allocation (the 495-combination table in the tournament
+   regulations): we work out which eight groups' third-placed teams qualify, then apply
+   the row for that exact combination (regs column order is 1A,1B,1D,1E,1G,1I,1K,1L).
+   This makes the bracket correct and complete the moment the group stage ends, with no
+   wait for any feed; the feed (knockouts.json) still runs first and wins where present. */
+function wcStandings(pub){
+  const table = {}; const thirds = []; let allComplete = true;
+  wcGroups().forEach(G => {
+    const tbl = {}; G.teams.forEach(t => tbl[t] = {team:t,P:0,W:0,D:0,L:0,GF:0,GA:0});
+    let played = 0;
+    G.games.forEach(g => {
+      let s = pub[g.a+"|"+g.b];
+      if(!s && pub[g.b+"|"+g.a]){ const r = pub[g.b+"|"+g.a]; s = [r[1], r[0]]; }
+      if(!s) return;
+      played++;
+      const A = tbl[g.a], B = tbl[g.b], ga = s[0], gb = s[1];
+      A.P++; B.P++; A.GF += ga; A.GA += gb; B.GF += gb; B.GA += ga;
+      if(ga > gb){ A.W++; B.L++; } else if(ga < gb){ B.W++; A.L++; } else { A.D++; B.D++; }
+    });
+    const rows = Object.values(tbl)
+      .map(r => ({...r, GD: r.GF - r.GA, Pts: r.W*3 + r.D}))
+      .sort((a,b) => b.Pts - a.Pts || b.GD - a.GD || b.GF - a.GF || a.team.localeCompare(b.team));
+    table[G.letter] = rows.map(r => r.team);
+    if(played === 6) thirds.push({letter: G.letter, rec: rows[2]}); else allComplete = false;
+  });
+  let thirdGroups = [];
+  if(allComplete){
+    thirdGroups = thirds.slice()
+      .sort((a,b) => b.rec.Pts - a.rec.Pts || b.rec.GD - a.rec.GD || b.rec.GF - a.rec.GF || a.letter.localeCompare(b.letter))
+      .slice(0, 8).map(x => x.letter).sort();
+  }
+  return {table, thirdGroups, allComplete};
+}
+
+/* FIFA Annex C rows, keyed by the sorted 8-letter combination of qualifying-third groups.
+   Each value maps a group winner's slot to the third-placed group it is drawn against. */
+const ANNEX_C = {
+  "BDEFIJKL": {A:"E", B:"J", D:"B", E:"D", G:"I", I:"F", K:"L", L:"K"}  // 2026 combination (Annex C row 67)
+};
+
+const _isWin   = x => /^[12][A-L]$/.test(x);
+const _isThird = x => /^3[A-L](\/[A-L])*$/.test(x);
+
+function deterministicR32(matches, pub){
+  const {table, thirdGroups, allComplete} = wcStandings(pub);
+  if(!allComplete) return;                          // only resolve once every group is final
+  const thirdMap = ANNEX_C[thirdGroups.join("")];
+  if(!thirdMap) return;                             // unfamiliar combination — leave it to the feed
+  matches.forEach(m => {
+    if(FLAGS[m.a] && FLAGS[m.b]) return;            // already real (feed resolved it)
+    let a = m.a, b = m.b;
+    if(_isWin(m.a) && table[m.a[1]]) a = table[m.a[1]][m.a[0] === "1" ? 0 : 1];
+    if(_isWin(m.b) && table[m.b[1]]) b = table[m.b[1]][m.b[0] === "1" ? 0 : 1];
+    if(_isThird(m.a) && _isWin(m.b)){ const tg = thirdMap[m.b[1]]; if(tg && table[tg]) a = table[tg][2]; }
+    if(_isThird(m.b) && _isWin(m.a)){ const tg = thirdMap[m.a[1]]; if(tg && table[tg]) b = table[tg][2]; }
+    if(FLAGS[a] && FLAGS[b]){ m.a = a; m.b = b; }
+  });
+}
+
 /* Replace placeholder knockout fixtures (2A, 1E, 3A/B/C/D/F...) with the real teams,
-   matched by kick-off instant so the schedule/venue is preserved. */
+   matched by kick-off instant so the schedule/venue is preserved. The feed runs first;
+   any slot it hasn't resolved is then filled deterministically from our group tables. */
 async function overlayKnockouts(matches){
   const fixtures = await fetchKnockouts();
   fixtures.forEach(f => {
@@ -312,6 +374,23 @@ async function overlayKnockouts(matches){
     const t = String(dt.getUTCHours()).padStart(2,"0") + ":" + String(dt.getUTCMinutes()).padStart(2,"0") + " UTC+0";
     matches.push({d: f.utc.slice(0,10), t, a: f.a, b: f.b, s: f.s || undefined, g: null});
   });
+  // Deterministic fallback: fill any R32 slot the feed missed, from our own complete tables.
+  try{
+    let pub = {};
+    try{ pub = await fetchPublishedScores(); }catch(_){}
+    matches.forEach(m => { if(m.s) pub[m.a + "|" + m.b] = m.s; });
+    deterministicR32(matches, pub);
+  }catch(_){}
+  // Safety: drop any exact duplicate knockout fixture (same date + teams) the feed appended.
+  const seen = new Set();
+  for(let i = 0; i < matches.length; i++){
+    const m = matches[i];
+    if(FLAGS[m.a] && FLAGS[m.b] && m.d >= "2026-06-28"){
+      const k = m.d + "|" + [m.a, m.b].sort().join("|");
+      if(seen.has(k)){ matches.splice(i, 1); i--; continue; }
+      seen.add(k);
+    }
+  }
   return matches;
 }
 
