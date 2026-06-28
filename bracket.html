@@ -238,6 +238,57 @@ PLAYERS.forEach(([p, teams]) => teams.forEach(t => TEAM_TO_PLAYER[t] = p));
 
 const DATA_URL = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json";
 
+/* ---------- Deterministic Round-of-32 resolution (FIFA Annex C) ----------
+   The bracket is fixed once the groups finish: winner / runner-up slots come straight
+   from the tables, and the eight best-third slots follow FIFA's Annex C allocation
+   (the official 495-combination table). Computed from our own scores.json so it never
+   waits on a lagging fixtures feed. Regs column order is 1A,1B,1D,1E,1G,1I,1K,1L. */
+const GROUPS = {"A":["Mexico","South Africa","South Korea","Czech Republic"],"B":["Canada","Bosnia & Herzegovina","Qatar","Switzerland"],"C":["Brazil","Morocco","Haiti","Scotland"],"D":["USA","Paraguay","Australia","Turkey"],"E":["Germany","Curaçao","Ivory Coast","Ecuador"],"F":["Netherlands","Japan","Sweden","Tunisia"],"G":["Belgium","Egypt","Iran","New Zealand"],"H":["Spain","Cape Verde","Saudi Arabia","Uruguay"],"I":["France","Senegal","Iraq","Norway"],"J":["Argentina","Algeria","Austria","Jordan"],"K":["Portugal","DR Congo","Uzbekistan","Colombia"],"L":["England","Croatia","Ghana","Panama"]};
+const ANNEX_C = {"BDEFIJKL":{A:"E",B:"J",D:"B",E:"D",G:"I",I:"F",K:"L",L:"K"}};  // 2026 combination (Annex C row 67)
+
+function r32FromGroups(scores){
+  const table = {}; const thirds = []; let allComplete = true;
+  Object.keys(GROUPS).forEach(L => {
+    const ts = GROUPS[L];
+    const tbl = {}; ts.forEach(t => tbl[t] = {team:t,P:0,W:0,D:0,L:0,GF:0,GA:0});
+    let played = 0;
+    for(let i=0;i<ts.length;i++) for(let j=i+1;j<ts.length;j++){
+      let s = scores[ts[i]+"|"+ts[j]];
+      if(!s && scores[ts[j]+"|"+ts[i]]){ const r = scores[ts[j]+"|"+ts[i]]; s = [r[1],r[0]]; }
+      if(!s) continue;
+      played++;
+      const A = tbl[ts[i]], B = tbl[ts[j]], ga = s[0], gb = s[1];
+      A.P++; B.P++; A.GF+=ga; A.GA+=gb; B.GF+=gb; B.GA+=ga;
+      if(ga>gb){ A.W++; B.L++; } else if(ga<gb){ B.W++; A.L++; } else { A.D++; B.D++; }
+    }
+    const rows = Object.values(tbl).map(r => ({...r,GD:r.GF-r.GA,Pts:r.W*3+r.D}))
+      .sort((a,b)=>b.Pts-a.Pts||b.GD-a.GD||b.GF-a.GF||a.team.localeCompare(b.team));
+    table[L] = rows.map(r=>r.team);
+    if(played===6) thirds.push({letter:L, rec:rows[2]}); else allComplete = false;
+  });
+  if(!allComplete) return;
+  const combo = thirds.slice()
+    .sort((a,b)=>b.rec.Pts-a.rec.Pts||b.rec.GD-a.rec.GD||b.rec.GF-a.rec.GF||a.letter.localeCompare(b.letter))
+    .slice(0,8).map(x=>x.letter).sort().join("");
+  const thirdMap = ANNEX_C[combo];
+  if(!thirdMap) return;
+  const win = c => table[c[1]] ? table[c[1]][c[0]==="1"?0:1] : null;
+  KO.forEach(k => {
+    if(k.round !== "Round of 32") return;
+    let t1 = k.t1, t2 = k.t2;
+    if(/^[12][A-L]$/.test(k.t1)) t1 = win(k.t1) || k.t1;
+    if(/^[12][A-L]$/.test(k.t2)) t2 = win(k.t2) || k.t2;
+    if(/^3/.test(k.t1) && /^1[A-L]$/.test(k.t2)){ const tg=thirdMap[k.t2[1]]; if(tg&&table[tg]) t1=table[tg][2]; }
+    if(/^3/.test(k.t2) && /^1[A-L]$/.test(k.t1)){ const tg=thirdMap[k.t1[1]]; if(tg&&table[tg]) t2=table[tg][2]; }
+    if(!FLAGS[t1] || !FLAGS[t2]) return;
+    k.t1 = t1; k.t2 = t2;
+    let s = scores[t1+"|"+t2];
+    if(!s && scores[t2+"|"+t1]){ const r = scores[t2+"|"+t1]; s = [r[1],r[0]]; }
+    const prev = MATCHES[k.num];
+    MATCHES[k.num] = {t1, t2, s: s || (prev && prev.s)};
+  });
+}
+
 const ROUNDS = [
   ["Round of 32", "R32", "28 June \u2013 3 July"],
   ["Round of 16", "R16", "4 \u2013 7 July"],
@@ -359,12 +410,12 @@ function showRound(roundName){
 }
 
 async function loadResults(){
+  let scoresMap = {};
   try{
     const r = await fetch("scores.json", {cache:"no-store"});
     if(r.ok){
       const j = await r.json();
-      // scores.json is keyed by team names; knockout matches need team-in-slot resolution,
-      // so we also pull the full fixture feed below. scores.json alone can't key by slot.
+      scoresMap = j.scores || {};
     }
   }catch(_){}
   try{
@@ -385,6 +436,9 @@ async function loadResults(){
       if(ko){ if(a && FLAGS[a]) ko.t1=a; if(b && FLAGS[b]) ko.t2=b; }
     });
   }catch(_){}
+  // Deterministic fallback: resolve the Round of 32 from our own complete tables (Annex C).
+  // Runs last so it corrects any slot a lagging feed left unresolved.
+  try{ r32FromGroups(scoresMap); }catch(_){}
 }
 
 async function init(){
