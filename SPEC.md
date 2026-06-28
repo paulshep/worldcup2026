@@ -463,3 +463,13 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v3.1 — Group stage summary gains a wry one-line-per-player verdict (commentary-style), with the factual team lines retained beneath it.
+
+## Knockout fixtures integrated (knockouts.json) (v3.2)
+- Root cause of two issues: the app's knockout fixtures were unresolved placeholders (2A, 1E, 3A/B/C/D/F...). The commentary/today/tomorrow therefore couldn't name knockout teams ("still to be decided"), and while the group-stage "through" count is computed from group tables (and works once all 72 group games are in), the bracket had no authoritative resolution.
+- Fix: the Action now publishes knockouts.json (mirroring scores.json), built from football-data.org (authoritative bracket source; key stays server-side). Each fixture: {stage, utc, a, b, s|null}. Only fixtures with BOTH teams resolved are included (best-third-dependent slots appear as the feed assigns them; FIFA/football-data resolve those shortly after the group stage, so the file fills progressively and the frequent Action picks them up).
+- Client: overlayKnockouts() reads knockouts.json and replaces placeholder knockout fixtures in the match list by matching kick-off instant (so schedule/venue/owner mapping are preserved), adding scores as games are played. Wired into both loadMatches paths. This feeds the results/today/tomorrow/commentary machinery real teams.
+- Group button: in addition to the computed top-2 + best-8-thirds logic, any team the feed has placed in the Round of 32 is confirmed THROUGH (handles FIFA's exact best-third slotting authoritatively as it resolves). Computed remains primary (more complete than the partial early feed); R32 confirmation is a union.
+- Verified: with current data, today's matches names "South Africa v Canada" (resolved 2A v 2B) with venue/owners intact; group button shows 32 through; no errors.
+
+## Change log (cont.)
+- v3.2 — Added knockouts.json (resolved bracket from football-data.org) and client overlayKnockouts(); knockout commentary/fixtures now name real teams, group button confirms via R32.
