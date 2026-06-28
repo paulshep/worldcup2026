@@ -6,7 +6,7 @@ dataset. No API keys anywhere. Merges both so gaps are filled either way.
 Writes scores.json (consumed by the message-maker app) and rebuilds leaderboard.html.
 Never blanks a populated page if a source is lagging.
 """
-import json, urllib.request, urllib.error, datetime, sys, os, unicodedata
+import json, urllib.request, urllib.error, datetime, sys, os, unicodedata, re
 
 PLAYERS = [["Ali", ["Iran", "Japan"]], ["Carlotta", ["Cape Verde", "South Africa"]], ["Dan", ["Bosnia & Herzegovina", "Argentina"]], ["Elliot", ["Algeria", "France"]], ["Euan", ["Australia", "Colombia"]], ["George", ["Netherlands", "Ecuador"]], ["Hannah", ["Jordan", "Germany"]], ["Jack", ["Curaçao", "Saudi Arabia"]], ["Jan", ["Belgium", "Spain"]], ["Joseph", ["Tunisia", "Sweden"]], ["Josh", ["Uruguay", "Iraq"]], ["Jonathan", ["Ivory Coast", "Switzerland"]], ["Jenny", ["Croatia", "Egypt"]], ["Kate", ["USA", "Qatar"]], ["Katie", ["Paraguay", "Morocco"]], ["Laura", ["Uzbekistan", "Czech Republic"]], ["Lou", ["Mexico", "Brazil"]], ["Matt", ["Ghana", "Haiti"]], ["Mike", ["New Zealand", "Scotland"]], ["Nick", ["England", "South Korea"]], ["Patrick", ["Norway", "Senegal"]], ["Paul", ["Portugal", "Turkey"]], ["Sophie", ["Panama", "Austria"]], ["Vic", ["Canada", "DR Congo"]]]
 FLAGS = {"Algeria": "🇩🇿", "Argentina": "🇦🇷", "Australia": "🇦🇺", "Austria": "🇦🇹", "Belgium": "🇧🇪", "Bosnia & Herzegovina": "🇧🇦", "Brazil": "🇧🇷", "Canada": "🇨🇦", "Cape Verde": "🇨🇻", "Colombia": "🇨🇴", "Croatia": "🇭🇷", "Curaçao": "🇨🇼", "Czech Republic": "🇨🇿", "DR Congo": "🇨🇩", "Ecuador": "🇪🇨", "Egypt": "🇪🇬", "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "France": "🇫🇷", "Germany": "🇩🇪", "Ghana": "🇬🇭", "Haiti": "🇭🇹", "Iran": "🇮🇷", "Iraq": "🇮🇶", "Ivory Coast": "🇨🇮", "Japan": "🇯🇵", "Jordan": "🇯🇴", "Mexico": "🇲🇽", "Morocco": "🇲🇦", "Netherlands": "🇳🇱", "New Zealand": "🇳🇿", "Norway": "🇳🇴", "Panama": "🇵🇦", "Paraguay": "🇵🇾", "Portugal": "🇵🇹", "Qatar": "🇶🇦", "Saudi Arabia": "🇸🇦", "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "Senegal": "🇸🇳", "South Africa": "🇿🇦", "South Korea": "🇰🇷", "Spain": "🇪🇸", "Sweden": "🇸🇪", "Switzerland": "🇨🇭", "Tunisia": "🇹🇳", "Turkey": "🇹🇷", "USA": "🇺🇸", "Uruguay": "🇺🇾", "Uzbekistan": "🇺🇿"}
@@ -73,6 +73,21 @@ def fetch_live():
     return out
 
 # ---- fallback: openfootball ----
+KO_OF = []   # resolved knockout fixtures from openfootball: {stage, utc, a, b, s|None}
+
+def _utc_iso(date, timestr):
+    # timestr like "12:00 UTC-7"; return ISO-Z instant, or None
+    mt = re.search(r"(\d{1,2}):(\d{2})", timestr or "")
+    if not mt or not date: return None
+    off = re.search(r"UTC([+-])(\d{1,2})", timestr or "")
+    o = (int(off.group(2)) * (1 if off.group(1) == "+" else -1)) if off else 0
+    try:
+        dt = datetime.datetime.strptime(date, "%Y-%m-%d").replace(
+            hour=int(mt.group(1)), minute=int(mt.group(2)), tzinfo=datetime.timezone.utc) - datetime.timedelta(hours=o)
+    except Exception:
+        return None
+    return dt.isoformat().replace("+00:00", "Z")
+
 def fetch_openfootball():
     url = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json"
     req = urllib.request.Request(url, headers={"User-Agent": "wc26-bot"})
@@ -86,10 +101,16 @@ def fetch_openfootball():
         a = resolve(a); b = resolve(b)
         if not a or not b: continue
         sc = m.get("score") or {}
-        if not (sc.get("ft") or sc.get("et")): continue
-        s = list(sc.get("et") or sc.get("ft"))
-        if sc.get("ps"): s += list(sc["ps"])
-        out.append({"a": a, "b": b, "s": s})
+        s = None
+        if sc.get("ft") or sc.get("et"):
+            s = list(sc.get("et") or sc.get("ft"))
+            if sc.get("ps"): s += list(sc["ps"])
+        # knockout fixtures (no group field) -> KO_OF for the bracket
+        if not m.get("group"):
+            utc = _utc_iso(m.get("date"), m.get("time"))
+            if utc: KO_OF.append({"stage": m.get("round"), "utc": utc, "a": a, "b": b, "s": s})
+        if s is not None:
+            out.append({"a": a, "b": b, "s": s})
     return out
 
 DIAG = {}
@@ -283,13 +304,30 @@ def main():
                    "source": source, "scores": scores}, f, ensure_ascii=False)
 
     # write knockouts.json (resolved bracket fixtures) for the message-maker app.
-    # Dedup by kickoff+teams; football-data.org is the authoritative bracket source.
-    seen, ko = set(), []
-    for fx in KO_FD:
-        k = (fx.get("utc"), fx["a"], fx["b"])
-        if k in seen: continue
-        seen.add(k); ko.append(fx)
-    DIAG["knockouts"] = f"{len(ko)} resolved fixtures"
+    # Robust merge keyed by kick-off instant: keep previously-resolved ties (a resolved tie is
+    # factual and must not regress when a feed momentarily drops it), let openfootball fill gaps,
+    # and let football-data.org (authoritative) overwrite teams + refresh scores.
+    ko_map = {}
+    try:
+        for f in json.load(open("knockouts.json", encoding="utf-8")).get("fixtures", []):
+            if f.get("utc"): ko_map[f["utc"]] = f
+    except Exception:
+        pass
+    for f in KO_OF:                       # openfootball: fill gaps only
+        u = f.get("utc")
+        if not u: continue
+        if u not in ko_map: ko_map[u] = dict(f)
+        elif f.get("s") and not ko_map[u].get("s"): ko_map[u]["s"] = f["s"]
+    for f in KO_FD:                       # football-data.org: authoritative overwrite
+        u = f.get("utc")
+        if not u: continue
+        ex = ko_map.get(u, {})
+        ex.update({"stage": f.get("stage"), "utc": u, "a": f["a"], "b": f["b"]})
+        if f.get("s"): ex["s"] = f["s"]
+        elif "s" not in ex: ex["s"] = None
+        ko_map[u] = ex
+    ko = sorted(ko_map.values(), key=lambda x: x["utc"])
+    DIAG["knockouts"] = f"{len(ko)} resolved fixtures (fd {len(KO_FD)}, of {len(KO_OF)})"
     with open("knockouts.json", "w", encoding="utf-8") as f:
         json.dump({"updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                    "fixtures": ko}, f, ensure_ascii=False)
