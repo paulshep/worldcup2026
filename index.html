@@ -1165,6 +1165,24 @@ async function buildGroupSummaryMsg(matches, setStatus){
     (await fetchKnockouts()).forEach(f => { inR32.add(f.a); inR32.add(f.b); });
   }catch(_){}
 
+  // Resolved Round-of-32 ties, taken from the already-overlaid fixtures (feed first, then our
+  // Annex C fallback). team -> the R32 match object, so each survivor can be told who they face.
+  const r32 = {};
+  matches.forEach(m => {
+    if(m.d >= "2026-06-28" && m.d <= "2026-07-03" && FLAGS[m.a] && FLAGS[m.b]){
+      r32[m.a] = m; r32[m.b] = m;
+    }
+  });
+  function r32line(team, owner){
+    const m = r32[team]; if(!m) return null;
+    const opp = (m.a === team) ? m.b : m.a;
+    const ko = kickoffUTC(m);
+    const when = ko ? (ukNiceDate(ko) + ", " + ukTime(ko)) : m.d;
+    const oOwn = TEAM_TO_PLAYER[opp];
+    const tag = !oOwn ? "" : (oOwn === owner ? " (also " + owner + "'s \u2014 a civil war!)" : " (" + oOwn + "'s)");
+    return "\u21b3 Round of 32: vs " + opp + tag + " \u2014 " + when;
+  }
+
   function status(team){
     const info = teamInfo[team];
     if(!info) return {through:false, line:"no group data yet"};
@@ -1249,10 +1267,14 @@ async function buildGroupSummaryMsg(matches, setStatus){
     if(n === 2) bothThrough++; else if(n === 1) oneThrough++;
     L.push(name + " \u2014 " + n + " of 2 through");
     L.push("  _" + colourLine(name, st) + "_");
-    st.forEach(x => L.push("  \u2022 " + x.t + ": " + x.line));
+    st.forEach(x => {
+      L.push("  \u2022 " + x.t + ": " + x.line);
+      if(x.through){ const rl = r32line(x.t, name); if(rl) L.push("      " + rl); }
+    });
     L.push("");
   });
   L.push("\ud83d\udcca " + totalThrough + " sweepstake teams through" + (allComplete ? "" : " so far") + " \u00b7 " + bothThrough + " player" + (bothThrough===1?"":"s") + " with both alive, " + oneThrough + " with one.");
+  if(allComplete && Object.keys(r32).length) L.push("\ud83d\udddd\ufe0f The Round of 32 is set \u2014 each survivor's first knockout tie is shown above.");
   if(!allComplete) L.push("Once every group has finished, the eight best third-placed teams are confirmed and this fills in fully.");
   return withFlags(L.join("\n"));
 }
