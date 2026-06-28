@@ -259,10 +259,12 @@ async function loadMatches(){
       g: m.ground
     }));
     await overlayLive(norm);
+    await overlayKnockouts(norm);
     return {matches: norm, live: true};
   }catch(_){
     const base = EMBEDDED_MATCHES.map(m => ({...m}));
     await overlayLive(base);
+    await overlayKnockouts(base);
     return {matches: base, live: false};
   }
 }
@@ -284,6 +286,33 @@ async function overlayLive(matches){
     const live = await fetchLiveScores();
     matches.forEach(m => { const k = m.a + "|" + m.b; if(live[k] && !m.s) m.s = live[k]; });
   }catch(_){ /* keep base scores */ }
+}
+
+/* Resolved knockout bracket published by the Action (football-data.org-backed). */
+const KO_URL = "knockouts.json";
+async function fetchKnockouts(){
+  try{
+    const r = await fetch(KO_URL, {cache:"no-store"});
+    if(!r.ok) return [];
+    const j = await r.json();
+    return (j.fixtures || []).filter(f => f.utc && FLAGS[f.a] && FLAGS[f.b]);
+  }catch(_){ return []; }
+}
+/* Replace placeholder knockout fixtures (2A, 1E, 3A/B/C/D/F...) with the real teams,
+   matched by kick-off instant so the schedule/venue is preserved. */
+async function overlayKnockouts(matches){
+  const fixtures = await fetchKnockouts();
+  fixtures.forEach(f => {
+    const inst = new Date(f.utc).getTime();
+    const slot = matches.find(m => { const ko = kickoffUTC(m); return ko && ko.getTime() === inst && !(FLAGS[m.a] && FLAGS[m.b]); });
+    if(slot){ slot.a = f.a; slot.b = f.b; if(f.s) slot.s = f.s; return; }
+    const already = matches.find(m => m.a === f.a && m.b === f.b);
+    if(already){ if(f.s) already.s = f.s; return; }
+    const dt = new Date(f.utc);
+    const t = String(dt.getUTCHours()).padStart(2,"0") + ":" + String(dt.getUTCMinutes()).padStart(2,"0") + " UTC+0";
+    matches.push({d: f.utc.slice(0,10), t, a: f.a, b: f.b, s: f.s || undefined, g: null});
+  });
+  return matches;
 }
 
 /* ---------- Shared Claude + web-search JSON helper ---------- */
@@ -1050,11 +1079,19 @@ async function buildGroupSummaryMsg(matches, setStatus){
       .slice(0, 8).forEach(x => bestThirds.add(x.team));
   }
 
+  // Authoritative confirmation: any team the feed has already placed in the Round of 32 is through,
+  // regardless of our computed tables (handles FIFA's exact best-third slotting as it resolves).
+  const inR32 = new Set();
+  try{
+    (await fetchKnockouts()).forEach(f => { inR32.add(f.a); inR32.add(f.b); });
+  }catch(_){}
+
   function status(team){
     const info = teamInfo[team];
     if(!info) return {through:false, line:"no group data yet"};
     const {letter, pos, rec, complete} = info;
     const recStr = "P" + rec.P + ", " + rec.Pts + "pt" + (rec.Pts === 1 ? "" : "s") + ", GD " + (rec.GD > 0 ? "+" : "") + rec.GD;
+    if(inR32.has(team) && (pos > 2 || !complete)) return {through:true, line:"\u2705 THROUGH to the Round of 32 (Group " + letter + ", " + recStr + ")"};
     if(!complete) return {through:false, line: ord(pos) + " in Group " + letter + " so far (" + recStr + ")"};
     if(pos === 1) return {through:true, line:"\u2705 THROUGH as Group " + letter + " winners (" + recStr + ")"};
     if(pos === 2) return {through:true, line:"\u2705 THROUGH as Group " + letter + " runners-up (" + recStr + ")"};
