@@ -455,3 +455,11 @@ Fifth button: **"Commentary"** — a WhatsApp message in the voice of a traditio
 
 ## Change log (cont.)
 - v3.0 — Added "Group stage" player-by-player summary button (group tables + 2026 top-2 + best-8-thirds qualification, progressive while group stage incomplete).
+
+## Group stage summary: wry per-player one-liner (v3.1)
+- The "Group stage" button now adds a one-line wry verdict per player (in the spirit of the Commentary button), shown in WhatsApp italics under the "N of 2 through" header, above the per-team status lines.
+- Uses the shared makePicker() anti-repetition picker so phrasing varies across the 24 players. Categories: both-through (with sub-flavours for both-group-winners vs one-via-best-third), one-through (names who survives and who exits), both-out, and a provisional variant for when groups are still in progress. Specifics are drawn from each team's group position/record; withFlags() adds flags to country names inside the verdict.
+- Verified across the completed group stage: lines are accurate to each player's situation and vary; no errors.
+
+## Change log (cont.)
+- v3.1 — Group stage summary gains a wry one-line-per-player verdict (commentary-style), with the factual team lines retained beneath it.
