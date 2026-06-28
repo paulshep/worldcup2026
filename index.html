@@ -532,6 +532,25 @@ async function buildResultsMsg(matches, live, startMs, endMs, setStatus){
 /* Score arrays: [a,b] = 90 mins; [a,b,"aet"] = extra time; [a,b,pa,pb] = pens decided */
 const scoreSuffix = s => s.length === 4 ? " (" + s[2] + "\u2013" + s[3] + " pens)" : (s[2] === "aet" ? " aet" : "");
 
+/* Which knockout round a kick-off instant falls in (null for the group stage), and what
+   winning it earns. Lets the commentary frame knockout ties as win-or-go-home rather than
+   league-table movement. Dates per the 2026 schedule. */
+function koRound(ko){
+  if(!ko) return null;
+  const t = ko.getTime();
+  if(t <  Date.UTC(2026,5,28)) return null;                 // group stage
+  if(t <  Date.UTC(2026,6,4))  return "Round of 32";        // 28 Jun \u2013 3 Jul
+  if(t <  Date.UTC(2026,6,9))  return "Round of 16";        // 4 \u2013 7 Jul
+  if(t <  Date.UTC(2026,6,14)) return "Quarter-final";      // 9 \u2013 11 Jul
+  if(t <  Date.UTC(2026,6,18)) return "Semi-final";         // 14 \u2013 15 Jul
+  if(t <  Date.UTC(2026,6,19)) return "Third-place play-off"; // 18 Jul
+  return "Final";                                           // 19 Jul
+}
+const NEXT_ROUND = {
+  "Round of 32":"Round of 16", "Round of 16":"quarter-finals",
+  "Quarter-final":"semi-finals", "Semi-final":"final"
+};
+
 /* ---------- Leaderboard ---------- */
 const mKey = m => m.a + "|" + m.b + "|" + m.d;
 
@@ -869,7 +888,11 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout){
     return Math.min(newPos, posOf[p]);
   };
   if(todays.length > 0){
-    L.push(P("predOpen", [
+    L.push(P("predOpen", knockout ? [
+      "TO THE BUSINESS END \u2014 win or go home, no second chances:",
+      "AND SO TO THE KNOCKOUTS. Sudden death, family pride on the line:",
+      "TO TONIGHT'S DRAMA, then \u2014 somebody's tournament ends here:"
+    ] : [
       "TO TODAY'S FIXTURES \u2014 and a few wholly unscientific predictions:",
       "AND SO TO TODAY. The family rivalries renew:",
       "RIGHT, today's grudge matches \u2014 keep it friendly in the group chat:",
@@ -877,7 +900,8 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout){
     ]));
     todays.forEach(({m, ko}) => {
       const p1 = TEAM_TO_PLAYER[m.a], p2 = TEAM_TO_PLAYER[m.b];
-      const head = "\u2022 " + m.a + " v " + m.b + " (" + ukTime(ko) + "): ";
+      const rnd = koRound(ko);
+      const head = "\u2022 " + m.a + " v " + m.b + " (" + (rnd ? rnd + ", " : "") + ukTime(ko) + "): ";
       if(p1 && p2 && p1 === p2){
         L.push(head + fill(P("both", [
           "{p} owns BOTH sides \u2014 can't lose, can't win, utterly zen. We should all live like {p} today.",
@@ -893,16 +917,24 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout){
         return;
       }
       const duel = p1 + " (" + ord(posOf[p1]) + ") meets " + p2 + " (" + ord(posOf[p2]) + ") in the family stakes. ";
-      const c1 = climbWithWin(p1), c2 = climbWithWin(p2);
-      const stakes = [];
-      if(c1 < posOf[p1]) stakes.push(aAn(m.a) + " win lifts " + p1 + " to " + ord(c1));
-      if(c2 < posOf[p2]) stakes.push("three points sends " + p2 + " up to " + ord(c2));
-      // if a top-3 player can't climb, frame it as defending their perch
-      if(!stakes.length){
-        const top = posOf[p1] <= posOf[p2] ? p1 : p2;
-        if(posOf[top] <= 3) stakes.push(top + " just wants to protect " + ord(posOf[top]) + " place");
+      let stakeLine;
+      if(knockout){
+        const nxt = NEXT_ROUND[rnd] || "the next round";
+        stakeLine = (rnd === "Final"
+          ? "Winner takes the World Cup itself. "
+          : "Winner books a place in the " + nxt + "; loser is out of the tournament. ");
+      } else {
+        const c1 = climbWithWin(p1), c2 = climbWithWin(p2);
+        const stakes = [];
+        if(c1 < posOf[p1]) stakes.push(aAn(m.a) + " win lifts " + p1 + " to " + ord(c1));
+        if(c2 < posOf[p2]) stakes.push("three points sends " + p2 + " up to " + ord(c2));
+        // if a top-3 player can't climb, frame it as defending their perch
+        if(!stakes.length){
+          const top = posOf[p1] <= posOf[p2] ? p1 : p2;
+          if(posOf[top] <= 3) stakes.push(top + " just wants to protect " + ord(posOf[top]) + " place");
+        }
+        stakeLine = stakes.length ? (stakes.join(", while ") + ". ").replace(/^./, c => c.toUpperCase()) : "";
       }
-      const stakeLine = stakes.length ? (stakes.join(", while ") + ". ").replace(/^./, c => c.toUpperCase()) : "";
       const kicker = knockout
         ? P("kickKO", [
             "No draws here \u2014 someone's tournament ends tonight.",
@@ -985,15 +1017,20 @@ async function buildCommentaryMsg(matches, setStatus){
       }),
       sweepstake_table: currRows.map((r,i) => ({pos: i+1, player: r.p, played: r.P,
         won: r.W, drawn: r.D, lost: r.L, gd: r.GD, points: r.Pts})),
-      fixtures: todays.map(x => ({
+      fixtures: todays.map(x => {
+        const rnd = koRound(x.ko);
+        return {
         kickoff: ukTime(x.ko) + " BST", venue: x.m.g ? venueLabel(x.m.g) : null,
+        round: rnd,                                   // e.g. "Round of 32"; null in the group stage
+        knockout: !!rnd,                              // true => single-elimination, win or go home
+        advances_to: rnd ? (NEXT_ROUND[rnd] || (rnd === "Final" ? "lifts the trophy" : "the next round")) : null,
         // The ONLY two teams in this fixture, each with the family member who owns it:
         team_home: x.m.a, owner_home: TEAM_TO_PLAYER[x.m.a] || null,
         team_away: x.m.b, owner_away: TEAM_TO_PLAYER[x.m.b] || null,
         owner_home_position: TEAM_TO_PLAYER[x.m.a] ? posOfP[TEAM_TO_PLAYER[x.m.a]] : null,
         owner_away_position: TEAM_TO_PLAYER[x.m.b] ? posOfP[TEAM_TO_PLAYER[x.m.b]] : null,
         same_owner: TEAM_TO_PLAYER[x.m.a] && TEAM_TO_PLAYER[x.m.a] === TEAM_TO_PLAYER[x.m.b]
-      }))
+      };})
     };
     const prompt =
       "You are a top-class football journalist writing the daily round-up for a family World Cup 2026 sweepstake "
@@ -1001,8 +1038,13 @@ async function buildCommentaryMsg(matches, setStatus){
       + "no headers), about 150-220 words, in warm, witty, polished prose \u2014 broadsheet-quality football writing with "
       + "a light, affectionate touch. Cover three things: (1) the recent results, with a little colour, naming the family "
       + "owner of each team; (2) how the sweepstake_table looks now; (3) a short preview of each upcoming fixture as a "
-      + "friendly duel between the two family owners, noting what a win would mean for their league position.\n\n"
+      + "friendly duel between the two family owners, noting the stakes.\n\n"
       + "STRICT ACCURACY RULES \u2014 follow exactly:\n"
+      + "\u2022 For each fixture: if knockout is true it is a single-elimination tie (its 'round' is given, e.g. Round of 32). "
+      + "Preview it as win-or-go-home \u2014 the WINNER advances to 'advances_to' and the LOSER is eliminated from the tournament. "
+      + "Make the survival stakes and the bragging rights between the two owners the heart of it, not league-table movement. "
+      + "If knockout is false it is a group game; there what a win means is climbing the sweepstake table. "
+      + "If these are the first knockout fixtures, you may note the group stage is done and the real drama begins.\n"
       + "\u2022 recent_results are ONLY the games from the last 24 hours. Do NOT imply they are the only games of the "
       + "tournament or state a tournament-wide game count from them \u2014 use games_played_in_tournament_total for any total. "
       + "Frame the recap as the latest match-day, not the start of the tournament (unless the total equals the recent count).\n"
