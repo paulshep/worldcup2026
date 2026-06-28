@@ -1,9 +1,9 @@
 {
- "ran": "2026-06-27T23:01:31+00:00",
+ "ran": "2026-06-28T00:14:16+00:00",
  "diagnostics": {
-  "footballdata": "64 finished matches (newest update 2026-06-27T23:01:06Z)",
+  "footballdata": "65 finished matches (newest update 2026-06-27T23:05:20Z)",
   "worldcup26": "68 finished matches",
-  "openfootball": "67 finished matches"
+  "openfootball": "68 finished matches"
  },
  "played": 68,
  "unmatched": [
