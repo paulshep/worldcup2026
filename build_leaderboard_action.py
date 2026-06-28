@@ -93,6 +93,7 @@ def fetch_openfootball():
     return out
 
 DIAG = {}
+KO_FD = []   # resolved knockout fixtures from football-data.org: {stage, utc, a, b, s|None}
 
 # ---- authoritative: football-data.org (key from env FOOTBALL_API_KEY, a GitHub secret) ----
 def fetch_footballdata():
@@ -106,25 +107,27 @@ def fetch_footballdata():
         data = json.load(r)
     out, newest = [], None
     for fx in data.get("matches", []):
-        if fx.get("status") not in ("FINISHED", "AWARDED"):
-            continue
         a = resolve((fx.get("homeTeam") or {}).get("name"))
         b = resolve((fx.get("awayTeam") or {}).get("name"))
-        if not a or not b:
-            continue
+        finished = fx.get("status") in ("FINISHED", "AWARDED")
         sc = fx.get("score") or {}
         ft = sc.get("fullTime") or {}
-        if ft.get("home") is None or ft.get("away") is None:
-            continue
-        s = [int(ft["home"]), int(ft["away"])]
-        if sc.get("duration") == "PENALTY_SHOOTOUT":
-            pens = sc.get("penalties") or {}
-            if pens.get("home") is not None and pens.get("away") is not None:
-                s += [int(pens["home"]), int(pens["away"])]
-        out.append({"a": a, "b": b, "s": s})
-        lu = fx.get("lastUpdated")
-        if lu and (newest is None or lu > newest):
-            newest = lu
+        s = None
+        if finished and ft.get("home") is not None and ft.get("away") is not None:
+            s = [int(ft["home"]), int(ft["away"])]
+            if sc.get("duration") == "PENALTY_SHOOTOUT":
+                pens = sc.get("penalties") or {}
+                if pens.get("home") is not None and pens.get("away") is not None:
+                    s += [int(pens["home"]), int(pens["away"])]
+        # knockout fixtures: any non-group stage with BOTH teams resolved (records the bracket)
+        if fx.get("stage") != "GROUP_STAGE" and a and b:
+            KO_FD.append({"stage": fx.get("stage"), "utc": fx.get("utcDate"), "a": a, "b": b, "s": s})
+        # finished results feed the leaderboard / scores.json
+        if finished and a and b and s is not None:
+            out.append({"a": a, "b": b, "s": s})
+            lu = fx.get("lastUpdated")
+            if lu and (newest is None or lu > newest):
+                newest = lu
     return out, newest
 
 def get_matches():
@@ -279,9 +282,21 @@ def main():
         json.dump({"updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                    "source": source, "scores": scores}, f, ensure_ascii=False)
 
+    # write knockouts.json (resolved bracket fixtures) for the message-maker app.
+    # Dedup by kickoff+teams; football-data.org is the authoritative bracket source.
+    seen, ko = set(), []
+    for fx in KO_FD:
+        k = (fx.get("utc"), fx["a"], fx["b"])
+        if k in seen: continue
+        seen.add(k); ko.append(fx)
+    DIAG["knockouts"] = f"{len(ko)} resolved fixtures"
+    with open("knockouts.json", "w", encoding="utf-8") as f:
+        json.dump({"updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+                   "fixtures": ko}, f, ensure_ascii=False)
+
     with open("leaderboard.html", "w", encoding="utf-8") as f:
         f.write(build_html(rows, played, css))
-    print(f"rebuilt: {played} matches via {source}, leader {rows[0]['p'] if played else 'n/a'}")
+    print(f"rebuilt: {played} matches via {source}, {len(ko)} knockout fixtures, leader {rows[0]['p'] if played else 'n/a'}")
     return 0
 
 if __name__ == "__main__":
