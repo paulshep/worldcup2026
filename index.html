@@ -1125,6 +1125,17 @@ async function buildGroupSummaryMsg(matches, setStatus){
   let pub = {};
   try{ pub = await fetchPublishedScores(); }catch(_){}
   matches.forEach(m => { if(m.s) pub[m.a + "|" + m.b] = m.s; });
+  // Resilience: if both the published file and the live feeds came back empty (a transient
+  // network/CDN hiccup), fall back to the last-known cached scores - the same store the
+  // leaderboard uses - so this button never silently shows everyone on zero points.
+  // Cache keys are dated (a|b|d); the group tally wants undated (a|b).
+  if(Object.keys(pub).length === 0){
+    try{
+      const cached = await cacheGet("wc26-scores-v2");
+      Object.keys(cached || {}).forEach(k => { const p = k.split("|"); if(p.length >= 2) pub[p[0] + "|" + p[1]] = cached[k]; });
+    }catch(_){}
+  }
+  const scoresLoaded = Object.keys(pub).length > 0;
 
   const teamInfo = {};   // team -> {letter,pos,rec,complete}
   const thirds = [];
@@ -1257,6 +1268,7 @@ async function buildGroupSummaryMsg(matches, setStatus){
 
   const L = [];
   L.push("\ud83c\udfc6 GROUP STAGE \u2014 PLAYER BY PLAYER");
+  if(!scoresLoaded) L.push("\u26a0\ufe0f Couldn't load the latest scores just now \u2014 please refresh and try again in a moment.");
   if(!allComplete) L.push("(group stage still in progress \u2014 some places undecided)");
   L.push("");
   let totalThrough = 0, bothThrough = 0, oneThrough = 0;
