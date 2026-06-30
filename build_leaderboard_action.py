@@ -234,10 +234,14 @@ def tally(matches):
     rows.sort(key=lambda r: (-r["Pts"], -r["GD"], -r["GF"], r["p"]))
     return rows, played
 
-def fl(a,b): return FLAGS.get(a,"") + FLAGS.get(b,"")
+def fl(a, b, out=()):
+    def one(t):
+        cls = "flag out" if t in out else "flag"
+        return f'<span class="{cls}" title="{t}">{FLAGS.get(t,"")}</span>'
+    return one(a) + one(b)
 def gdstr(g): return ("+" if g>0 else "") + str(g)
 
-def build_html(rows, played, css):
+def build_html(rows, played, css, out=()):
     if played == 0:
         sub = "The tournament is about to begin"; podium = ""; podium_style = ' style="display:none"'
         board = ('<div class="empty"><div class="big">No goals yet</div>'
@@ -249,7 +253,7 @@ def build_html(rows, played, css):
         def plinth(r, place):
             return (f'<div class="plinth p{place}"><div class="medal">{medals[place]}</div>'
                     f'<div class="nm">{r["p"]}</div><div class="pts">{r["Pts"]}</div>'
-                    f'<div class="ptlabel">points</div><div class="teams">{fl(r["teams"][0],r["teams"][1])}</div>'
+                    f'<div class="ptlabel">points</div><div class="teams">{fl(r["teams"][0],r["teams"][1],out)}</div>'
                     f'<div class="bar"></div></div>')
         t3 = rows[:3]; podium = plinth(t3[1],2) + plinth(t3[0],1) + plinth(t3[2],3); podium_style = ""
         body, pos, prev = [], 0, None
@@ -260,7 +264,7 @@ def build_html(rows, played, css):
             gdcls = "pos" if r["GD"]>0 else ("neg" if r["GD"]<0 else "")
             body.append(
                 f'<div class="row{top}"><div class="r-num">{pos}</div>'
-                f'<div class="r-name">{r["p"]}<span class="flags">{fl(r["teams"][0],r["teams"][1])}</span></div>'
+                f'<div class="r-name">{r["p"]}<span class="flags">{fl(r["teams"][0],r["teams"][1],out)}</span></div>'
                 f'<div class="r-pld">{r["P"]}</div>'
                 f'<div class="r-wdl"><span class="w">{r["W"]}</span> {r["D"]} <span class="l">{r["L"]}</span></div>'
                 f'<div class="r-gd {gdcls}">{gdstr(r["GD"])}</div>'
@@ -276,6 +280,14 @@ def build_html(rows, played, css):
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Sweepstake Standings &middot; World Cup 2026</title>
 <style>{css}</style>
+<style>
+.flag{{position:relative;display:inline-block;line-height:1}}
+.flag+.flag{{margin-left:3px}}
+.flag.out{{opacity:.8}}
+.flag.out::after{{content:"\\2715";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:#e23b3b;font-weight:900;font-size:1.15em;line-height:1;
+  text-shadow:0 0 2px #fff,0 0 4px #fff,0 0 5px #fff;pointer-events:none}}
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -353,9 +365,27 @@ def main():
         json.dump({"updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                    "fixtures": ko}, f, ensure_ascii=False)
 
+    # Work out which sweepstake teams are knocked out, to cross their flags out on the board:
+    #  - any team that lost a completed knockout tie (incl. on penalties), and
+    #  - once the bracket is fully drawn (32 teams), anyone who didn't make the Round of 32.
+    all_teams = set(t for ts in TEAM_OF.values() for t in ts)
+    r32_teams, out_teams = set(), set()
+    for f in ko:
+        is_r32 = (f.get("stage") in ("LAST_32", "Round of 32")) or ("2026-06-28" <= (f.get("utc") or "") < "2026-07-04")
+        if is_r32 and f.get("a") in all_teams and f.get("b") in all_teams:
+            r32_teams.update([f["a"], f["b"]])
+        s = f.get("s")
+        if valid_score(s):
+            a, b = f.get("a"), f.get("b")
+            loser = (b if s[0] > s[1] else a if s[1] > s[0] else None) if len(s) == 2 else (b if s[2] > s[3] else a)
+            if loser in all_teams:
+                out_teams.add(loser)
+    if len(r32_teams) == 32:                       # bracket fully drawn -> non-qualifiers are out
+        out_teams |= (all_teams - r32_teams)
+
     with open("leaderboard.html", "w", encoding="utf-8") as f:
-        f.write(build_html(rows, played, css))
-    print(f"rebuilt: {played} matches via {source}, {len(ko)} knockout fixtures, leader {rows[0]['p'] if played else 'n/a'}")
+        f.write(build_html(rows, played, css, out_teams))
+    print(f"rebuilt: {played} matches via {source}, {len(ko)} knockout fixtures, {len(out_teams)} teams out, leader {rows[0]['p'] if played else 'n/a'}")
     return 0
 
 if __name__ == "__main__":
