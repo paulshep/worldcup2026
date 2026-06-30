@@ -193,8 +193,15 @@ def get_matches():
         for m in lst:
             k = m["a"] + "|" + m["b"]
             rec = by_key.setdefault(k, {"a": m["a"], "b": m["b"], "s": None})
-            if valid_score(m.get("s")):
-                rec["s"] = m["s"]
+            cand = m.get("s")
+            if not valid_score(cand):
+                continue
+            cur = rec["s"]
+            # A knockout decided on penalties is [a,a,penH,penA]. Don't let a higher-precedence
+            # source that only reports the level 90/120-min score [a,a] wipe out the shoot-out.
+            if cur and len(cur) == 4 and len(cand) == 2 and cand[0] == cand[1]:
+                continue
+            rec["s"] = cand
     merged = [m for m in by_key.values() if m["s"]]
     contributors = [name for name, lst in (("football-data.org", fd), ("worldcup26.ir", live), ("openfootball", of)) if lst]
     source = "+".join(contributors) if contributors else "none"
