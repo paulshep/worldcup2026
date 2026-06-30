@@ -104,7 +104,8 @@ def fetch_openfootball():
         s = None
         if sc.get("ft") or sc.get("et"):
             s = list(sc.get("et") or sc.get("ft"))
-            if sc.get("ps"): s += list(sc["ps"])
+            pens = sc.get("p") or sc.get("ps") or sc.get("pen")   # openfootball uses "p" for shoot-out
+            if pens: s += list(pens)
         # knockout fixtures (no group field) -> KO_OF for the bracket
         if not m.get("group"):
             utc = _utc_iso(m.get("date"), m.get("time"))
@@ -151,6 +152,14 @@ def fetch_footballdata():
                 newest = lu
     return out, newest
 
+def valid_score(s):
+    # Valid as [a,b] (decided in normal/extra time) or [a,b,penH,penA] with a==b and penH!=penA
+    # (decided on penalties). Anything else (pens on an unequal score, or equal pens) is malformed.
+    if not s: return False
+    if len(s) == 2: return True
+    if len(s) == 4: return s[0] == s[1] and s[2] != s[3]
+    return False
+
 def get_matches():
     fd, fd_newest = [], None
     try:
@@ -176,14 +185,17 @@ def get_matches():
     except Exception as e:
         DIAG["openfootball"] = "ERROR: " + str(e)[:200]
         print("openfootball failed:", e)
-    # Merge for max freshness: a match counts as soon as ANY source has its final score.
-    # On overlap, the more authoritative source wins (football-data.org > worldcup26.ir > openfootball),
-    # so a flaky source can never override a confirmed authoritative result.
+    # Merge for max freshness: a match counts as soon as ANY source has a VALID final score.
+    # Iterate low -> high authority (openfootball < worldcup26.ir < football-data.org); only a
+    # valid score may set/overwrite, so a flaky source can never poison or override a good result.
     by_key = {}
-    for m in of:   by_key[m["a"] + "|" + m["b"]] = m   # least authoritative base
-    for m in live: by_key[m["a"] + "|" + m["b"]] = m   # real-time overlay
-    for m in fd:   by_key[m["a"] + "|" + m["b"]] = m   # authoritative wins
-    merged = list(by_key.values())
+    for name, lst in (("of", of), ("live", live), ("fd", fd)):
+        for m in lst:
+            k = m["a"] + "|" + m["b"]
+            rec = by_key.setdefault(k, {"a": m["a"], "b": m["b"], "s": None})
+            if valid_score(m.get("s")):
+                rec["s"] = m["s"]
+    merged = [m for m in by_key.values() if m["s"]]
     contributors = [name for name, lst in (("football-data.org", fd), ("worldcup26.ir", live), ("openfootball", of)) if lst]
     source = "+".join(contributors) if contributors else "none"
     return merged, source
@@ -310,20 +322,22 @@ def main():
     ko_map = {}
     try:
         for f in json.load(open("knockouts.json", encoding="utf-8")).get("fixtures", []):
-            if f.get("utc"): ko_map[f["utc"]] = f
+            if not f.get("utc"): continue
+            if f.get("s") and not valid_score(f["s"]): f["s"] = None   # drop any stuck malformed score
+            ko_map[f["utc"]] = f
     except Exception:
         pass
-    for f in KO_OF:                       # openfootball: fill gaps only
+    for f in KO_OF:                       # openfootball: fill gaps / correct a missing-or-invalid score
         u = f.get("utc")
         if not u: continue
         if u not in ko_map: ko_map[u] = dict(f)
-        elif f.get("s") and not ko_map[u].get("s"): ko_map[u]["s"] = f["s"]
-    for f in KO_FD:                       # football-data.org: authoritative overwrite
+        elif valid_score(f.get("s")) and not valid_score(ko_map[u].get("s")): ko_map[u]["s"] = f["s"]
+    for f in KO_FD:                       # football-data.org: authoritative overwrite (valid scores only)
         u = f.get("utc")
         if not u: continue
         ex = ko_map.get(u, {})
         ex.update({"stage": f.get("stage"), "utc": u, "a": f["a"], "b": f["b"]})
-        if f.get("s"): ex["s"] = f["s"]
+        if valid_score(f.get("s")): ex["s"] = f["s"]
         elif "s" not in ex: ex["s"] = None
         ko_map[u] = ex
     ko = sorted(ko_map.values(), key=lambda x: x["utc"])
