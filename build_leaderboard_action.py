@@ -28,7 +28,7 @@ ALIAS = {
     "unitedstates": "USA", "unitedstatesofamerica": "USA",
     "korearepublic": "South Korea", "koreasouth": "South Korea",
     "bosniaandherzegovina": "Bosnia & Herzegovina",
-    "caboverde": "Cape Verde", "czechia": "Czech Republic",
+    "caboverde": "Cape Verde", "capeverdeislands": "Cape Verde", "czechia": "Czech Republic",
 }
 _unmatched = set()
 def resolve(name):
