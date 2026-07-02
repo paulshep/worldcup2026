@@ -1054,6 +1054,10 @@ async function buildCommentaryMsg(matches, setStatus){
         same_owner: TEAM_TO_PLAYER[x.m.a] && TEAM_TO_PLAYER[x.m.a] === TEAM_TO_PLAYER[x.m.b]
       };})
     };
+    const partOfDay = (function(){
+      const h = parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',hour:'numeric',hour12:false}).format(new Date()), 10);
+      return h < 12 ? 'morning' : (h < 18 ? 'afternoon' : 'evening');
+    })();
     const prompt =
       "You are a top-class football journalist writing the daily round-up for a family World Cup 2026 sweepstake "
       + "in which each family member owns specific national teams. Write a WhatsApp message in plain text (no markdown, "
@@ -1078,7 +1082,7 @@ async function buildCommentaryMsg(matches, setStatus){
       + "person owns both sides \u2014 say so wittily.\n"
       + "\u2022 Use only the data provided. Do not invent scores, scorers, or events. If a score is 'not yet confirmed', say results are still coming in.\n"
       + "\u2022 This is the " + phase + ". Do NOT mention extra time or penalty shootouts unless the phase is the knockout stage.\n"
-      + "\u2022 It is currently the " + (function(){var h=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',hour:'numeric',hour12:false}).format(new Date()),10);return h<12?'morning':(h<18?'afternoon':'evening');})() + " in the UK. If you greet, greet for THAT time of day and never reference a different one (no 'good evening' in the morning).\n"
+      + "\u2022 It is currently the " + partOfDay + " in the UK. Match BOTH any opening greeting AND your closing sign-off to that time of day, and never reference a different one. In particular, do NOT use 'sleep well', 'goodnight', 'sweet dreams' or 'good evening' unless it is actually the evening \u2014 in the morning or afternoon sign off accordingly (e.g. 'enjoy the day ahead', 'back later') or keep it time-neutral ('see you next time').\n"
       + "\u2022 After EVERY mention of a country/team name, put its flag emoji immediately after the name (e.g. 'Mexico \ud83c\uddf2\ud83c\uddfd'). Do this for every occurrence.\n"
       + "\u2022 Vary your language; never repeat a stock phrase. Spell every team and player name exactly as given.\n\n"
       + "DATA:\n" + JSON.stringify(data);
