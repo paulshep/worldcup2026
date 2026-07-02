@@ -359,7 +359,25 @@ def main():
         if valid_score(f.get("s")): ex["s"] = f["s"]
         elif "s" not in ex: ex["s"] = None
         ko_map[u] = ex
-    ko = sorted(ko_map.values(), key=lambda x: x["utc"])
+    # Collapse duplicate ties: the same fixture can arrive under slightly different kickoff
+    # instants from different feeds (or a sticky entry from an earlier run), which would key
+    # twice. Merge by team-pair, preferring football-data's kickoff and any valid score.
+    fd_utc = {tuple(sorted([f["a"], f["b"]])): f["utc"] for f in KO_FD if f.get("a") and f.get("b") and f.get("utc")}
+    best = {}
+    for f in sorted(ko_map.values(), key=lambda x: x["utc"]):
+        key = tuple(sorted([f.get("a", ""), f.get("b", "")]))
+        if key in fd_utc:
+            f = {**f, "utc": fd_utc[key]}
+        cur = best.get(key)
+        if cur is None:
+            best[key] = f
+        else:
+            if valid_score(f.get("s")) and not valid_score(cur.get("s")):
+                f = {**f, "utc": cur.get("utc") if key not in fd_utc else f["utc"]}
+                best[key] = f
+            elif valid_score(f.get("s")) and valid_score(cur.get("s")):
+                cur["s"] = f["s"]
+    ko = sorted(best.values(), key=lambda x: x["utc"])
     DIAG["knockouts"] = f"{len(ko)} resolved fixtures (fd {len(KO_FD)}, of {len(KO_OF)})"
     with open("knockouts.json", "w", encoding="utf-8") as f:
         json.dump({"updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
