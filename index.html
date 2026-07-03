@@ -587,19 +587,20 @@ async function cacheSet(key, map){
   try{ if(window.storage) await window.storage.set(key, JSON.stringify(map)); }catch(_){}
 }
 
-/* Gather scores for every match that has finished (kick-off + 2h45 before now). */
+/* Gather scores for every finished match. A match is finished as soon as we hold a confirmed
+   published score for it (so a game that has just ended counts the instant its result lands),
+   or, failing that, once enough time has passed (kick-off + 2h45) to assume completion. */
 async function gatherAllScores(matches, setStatus){
   const now = Date.now();
-  const finished = matches.filter(m => {
-    const ko = kickoffUTC(m);
-    return ko && (ko.getTime() + 165*60000) < now && FLAGS[m.a] && FLAGS[m.b];
-  });
-
   // Authoritative source of truth: the published scores.json (football-data.org-backed, hourly).
-  // overlayLive already applied it to m.s; we also re-fetch here so the commentary always matches
-  // the leaderboard even if the earlier overlay missed, mapping undated scores.json keys to our dated keys.
   let pub = {};
   try{ pub = await fetchPublishedScores(); }catch(_){ pub = {}; }
+  const hasScore = m => !!m.s || !!pub[m.a + "|" + m.b];
+  const finished = matches.filter(m => {
+    const ko = kickoffUTC(m);
+    if(!ko || !FLAGS[m.a] || !FLAGS[m.b]) return false;
+    return hasScore(m) || (ko.getTime() + 165*60000) < now;
+  });
   const scores = {};
   finished.forEach(m => {
     const undated = m.a + "|" + m.b;
