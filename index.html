@@ -136,10 +136,13 @@ PLAYERS.forEach(([p, teams]) => teams.forEach(t => TEAM_TO_PLAYER[t] = p));
 /* Player pronouns, supplied by the family (never guessed from names). Anyone not listed
    defaults to they/them, which is always safe. Add entries here as they're confirmed. */
 const PRONOUNS = {
-  Ali: "she/her",
-  Jan: "she/her",
-  Lou: "she/her",
-  Vic: "he/him"
+  Ali: "she/her", Carlotta: "she/her", Hannah: "she/her", Jan: "she/her",
+  Jenny: "she/her", Kate: "she/her", Katie: "she/her", Laura: "she/her",
+  Lou: "she/her", Sophie: "she/her",
+  Dan: "he/him", Elliot: "he/him", Euan: "he/him", George: "he/him",
+  Jack: "he/him", Jonathan: "he/him", Joseph: "he/him", Josh: "he/him",
+  Matt: "he/him", Mike: "he/him", Nick: "he/him", Patrick: "he/him",
+  Paul: "he/him", Vic: "he/him"
 };
 const pronounsOf = name => PRONOUNS[name] || "they/them";
 
