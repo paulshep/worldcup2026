@@ -133,6 +133,16 @@ const PLAYERS = [
 const TEAM_TO_PLAYER = {};
 PLAYERS.forEach(([p, teams]) => teams.forEach(t => TEAM_TO_PLAYER[t] = p));
 
+/* Player pronouns, supplied by the family (never guessed from names). Anyone not listed
+   defaults to they/them, which is always safe. Add entries here as they're confirmed. */
+const PRONOUNS = {
+  Ali: "she/her",
+  Jan: "she/her",
+  Lou: "she/her",
+  Vic: "he/him"
+};
+const pronounsOf = name => PRONOUNS[name] || "they/them";
+
 const FLAGS = {
   "Algeria":"\ud83c\udde9\ud83c\uddff","Argentina":"\ud83c\udde6\ud83c\uddf7","Australia":"\ud83c\udde6\ud83c\uddfa","Austria":"\ud83c\udde6\ud83c\uddf9","Belgium":"\ud83c\udde7\ud83c\uddea",
   "Bosnia & Herzegovina":"\ud83c\udde7\ud83c\udde6","Brazil":"\ud83c\udde7\ud83c\uddf7","Canada":"\ud83c\udde8\ud83c\udde6","Cape Verde":"\ud83c\udde8\ud83c\uddfb",
@@ -1042,6 +1052,7 @@ async function buildCommentaryMsg(matches, setStatus){
   try{
     const data = {
       phase: phase,
+      player_pronouns: Object.fromEntries(PLAYERS.map(([p]) => [p, pronounsOf(p)])),
       roundup_note: "recent_results lists ONLY matches played in the last 24 hours (this is a daily round-up). " +
                     "games_played_in_tournament_total is the running total across all match-days so far. " +
                     "sweepstake_table reflects ALL games played, not just the recent ones.",
@@ -1084,6 +1095,9 @@ async function buildCommentaryMsg(matches, setStatus){
       + "owner of each team; (2) how the sweepstake_table looks now; (3) a short preview of each upcoming fixture as a "
       + "friendly duel between the two family owners, noting the stakes.\n\n"
       + "STRICT ACCURACY RULES \u2014 follow exactly:\n"
+      + "\u2022 PRONOUNS: use each family member's pronouns EXACTLY as given in player_pronouns (a map of name -> pronouns, "
+      + "e.g. 'she/her', 'he/him', 'they/them'). NEVER infer someone's gender from their name. If a player's pronouns are "
+      + "'they/them', use singular they. This applies to every mention of that person.\n"
       + "\u2022 For each fixture: if knockout is true it is a single-elimination tie (its 'round' is given, e.g. Round of 32). "
       + "Preview it as win-or-go-home \u2014 the WINNER advances to 'advances_to' and the LOSER is eliminated from the tournament. "
       + "Make the survival stakes and the bragging rights between the two owners the heart of it, not league-table movement. "
