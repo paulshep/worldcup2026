@@ -338,6 +338,12 @@ def main():
     # Robust merge keyed by kick-off instant: keep previously-resolved ties (a resolved tie is
     # factual and must not regress when a feed momentarily drops it), let openfootball fill gaps,
     # and let football-data.org (authoritative) overwrite teams + refresh scores.
+    # Completeness rank so a penalty result is never overwritten by a bare level score:
+    #  3 = [a,a,penH,penA] (shoot-out), 2 = decisive in normal/extra time, 1 = level [a,a], -1 = none.
+    def ko_rank(s):
+        if not valid_score(s): return -1
+        if len(s) == 4: return 3
+        return 2 if s[0] != s[1] else 1
     ko_map = {}
     try:
         for f in json.load(open("knockouts.json", encoding="utf-8")).get("fixtures", []):
@@ -346,17 +352,17 @@ def main():
             ko_map[f["utc"]] = f
     except Exception:
         pass
-    for f in KO_OF:                       # openfootball: fill gaps / correct a missing-or-invalid score
+    for f in KO_OF:                       # openfootball: fill / upgrade to a strictly more complete score
         u = f.get("utc")
         if not u: continue
         if u not in ko_map: ko_map[u] = dict(f)
-        elif valid_score(f.get("s")) and not valid_score(ko_map[u].get("s")): ko_map[u]["s"] = f["s"]
-    for f in KO_FD:                       # football-data.org: authoritative overwrite (valid scores only)
+        elif ko_rank(f.get("s")) > ko_rank(ko_map[u].get("s")): ko_map[u]["s"] = f["s"]
+    for f in KO_FD:                       # football-data.org: authoritative, but never downgrade completeness
         u = f.get("utc")
         if not u: continue
         ex = ko_map.get(u, {})
         ex.update({"stage": f.get("stage"), "utc": u, "a": f["a"], "b": f["b"]})
-        if valid_score(f.get("s")): ex["s"] = f["s"]
+        if valid_score(f.get("s")) and ko_rank(f["s"]) >= ko_rank(ex.get("s")): ex["s"] = f["s"]
         elif "s" not in ex: ex["s"] = None
         ko_map[u] = ex
     # Collapse duplicate ties: the same fixture can arrive under slightly different kickoff
