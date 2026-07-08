@@ -265,7 +265,8 @@ async function loadMatches(){
       s: (function(sc){
         if(!sc || !(sc.ft || sc.et)) return undefined;
         let v = (sc.et || sc.ft).slice();
-        if(sc.ps) v = v.concat(sc.ps);
+        const pens = sc.p || sc.ps || sc.pen;   // openfootball uses "p" for the shoot-out
+        if(pens) v = v.concat(pens);
         else if(sc.et) v.push("aet");
         return v;
       })(m.score),
@@ -408,12 +409,15 @@ function deterministicR32(matches, pub){
    any slot it hasn't resolved is then filled deterministically from our group tables. */
 async function overlayKnockouts(matches){
   const fixtures = await fetchKnockouts();
+  // A better score is one that is present and at least as detailed as what's there (so a bare
+  // [0,0] from the feed can't wipe out a [0,0,pen,pen] penalty result we already hold).
+  const better = (nu, old) => nu && (!old || nu.length >= old.length);
   fixtures.forEach(f => {
     const inst = new Date(f.utc).getTime();
     const slot = matches.find(m => { const ko = kickoffUTC(m); return ko && ko.getTime() === inst && !(FLAGS[m.a] && FLAGS[m.b]); });
-    if(slot){ slot.a = f.a; slot.b = f.b; if(f.s) slot.s = f.s; return; }
+    if(slot){ slot.a = f.a; slot.b = f.b; if(better(f.s, slot.s)) slot.s = f.s; return; }
     const already = matches.find(m => m.a === f.a && m.b === f.b);
-    if(already){ if(f.s) already.s = f.s; return; }
+    if(already){ if(better(f.s, already.s)) already.s = f.s; return; }
     const dt = new Date(f.utc);
     const t = String(dt.getUTCHours()).padStart(2,"0") + ":" + String(dt.getUTCMinutes()).padStart(2,"0") + " UTC+0";
     matches.push({d: f.utc.slice(0,10), t, a: f.a, b: f.b, s: f.s || undefined, g: null});
@@ -1028,11 +1032,16 @@ async function buildCommentaryMsg(matches, setStatus){
   const now = new Date();
   const N = now.getTime();
   const {finished, scores} = await gatherAllScores(matches, setStatus);
+  // Previous day's results: gather every match dated (US-local, i.e. the m.d field) the calendar day
+  // before today's UK date. This reliably captures the whole gameday (e.g. both quarter-finals)
+  // whenever the message is generated, instead of a rolling 24h window that clips an early game.
+  const ukDate = d => new Intl.DateTimeFormat('en-CA', {timeZone: 'Europe/London'}).format(d);
+  const prevDay = ukDate(new Date(N - DAY));
   const results = matches.filter(m => {
+    if(m.d !== prevDay || !FLAGS[m.a] || !FLAGS[m.b]) return false;
     const ko = kickoffUTC(m);
-    if(!ko || !inWindow(ko, N - DAY, N)) return false;
-    // include if we already have a score (definitely done), or enough time has passed to be finished
-    return !!scores[mKey(m)] || (ko.getTime() + 165*60000) < N;
+    // only count it as a result if it's actually finished (we hold a score, or enough time has passed)
+    return !!scores[mKey(m)] || (ko && (ko.getTime() + 165*60000) < N);
   });
   // Upcoming fixtures = the NEXT gameday's matches (grouped by US-local match date), not a fixed
   // 24-hour window. On a rest day this still finds the next day that actually has games.
