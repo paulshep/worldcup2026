@@ -770,7 +770,7 @@ const fill = (tpl, v) => tpl.replace(/\{(\w+)\}/g, (_, k) => (v[k] !== undefined
 const ord = n => n + (n%10==1&&n%100!=11?"st":n%10==2&&n%100!=12?"nd":n%10==3&&n%100!=13?"rd":"th");
 const aAn = w => (/^[AEIOUaeiou]/.test(w) ? "an " : "a ") + w;
 
-function localCommentary(results, scores, prevRows, currRows, todays, knockout){
+function localCommentary(results, scores, prevRows, currRows, todays, knockout, gamedayLabel){
   const P = makePicker();
   const L = [];
 
@@ -941,15 +941,15 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout){
     return Math.min(newPos, posOf[p]);
   };
   if(todays.length > 0){
+    const when = gamedayLabel || "next up";
     L.push(P("predOpen", knockout ? [
-      "TO THE BUSINESS END \u2014 win or go home, no second chances:",
-      "AND SO TO THE KNOCKOUTS. Sudden death, family pride on the line:",
-      "TO TONIGHT'S DRAMA, then \u2014 somebody's tournament ends here:"
+      "TO THE BUSINESS END, " + when + " \u2014 win or go home, no second chances:",
+      "NEXT KNOCKOUT ACTION " + when + " \u2014 sudden death, family pride on the line:",
+      "LOOKING AHEAD " + when + " \u2014 somebody's tournament ends:"
     ] : [
-      "TO TODAY'S FIXTURES \u2014 and a few wholly unscientific predictions:",
-      "AND SO TO TODAY. The family rivalries renew:",
-      "RIGHT, today's grudge matches \u2014 keep it friendly in the group chat:",
-      "TO THE CRYSTAL BALL, then. Squint and you might see the future:"
+      "THE NEXT FIXTURES, " + when + " \u2014 and a few wholly unscientific predictions:",
+      "COMING UP " + when + " \u2014 the family rivalries renew:",
+      "TO THE CRYSTAL BALL \u2014 the grudge matches " + when + ":"
     ]));
     todays.forEach(({m, ko}) => {
       const p1 = TEAM_TO_PLAYER[m.a], p2 = TEAM_TO_PLAYER[m.b];
@@ -990,7 +990,7 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout){
       }
       const kicker = knockout
         ? P("kickKO", [
-            "No draws here \u2014 someone's tournament ends tonight.",
+            "No draws here \u2014 one of them goes home.",
             "Win or go home. Hold onto something.",
             "Sudden-death stuff. May the bravest side prevail."
           ])
@@ -1034,8 +1034,21 @@ async function buildCommentaryMsg(matches, setStatus){
     // include if we already have a score (definitely done), or enough time has passed to be finished
     return !!scores[mKey(m)] || (ko.getTime() + 165*60000) < N;
   });
-  const todays = matches.map(m => ({m, ko: kickoffUTC(m)}))
-    .filter(x => inWindow(x.ko, N, N + DAY)).sort((a,b) => a.ko - b.ko);       // next 24h
+  // Upcoming fixtures = the NEXT gameday's matches (grouped by US-local match date), not a fixed
+  // 24-hour window. On a rest day this still finds the next day that actually has games.
+  const upcomingAll = matches.map(m => ({m, ko: kickoffUTC(m)}))
+    .filter(x => x.ko && x.ko.getTime() >= N && FLAGS[x.m.a] && FLAGS[x.m.b]);
+  const nextGameday = upcomingAll.length ? upcomingAll.map(x => x.m.d).sort()[0] : null;
+  const todays = nextGameday ? upcomingAll.filter(x => x.m.d === nextGameday).sort((a, b) => a.ko - b.ko) : [];
+  const gamedayLabel = (() => {
+    if(!todays.length) return null;
+    const ukDay = d => new Intl.DateTimeFormat('en-CA', {timeZone: 'Europe/London'}).format(d);
+    const kd = ukDay(todays[0].ko), t0 = ukDay(new Date(N)), t1 = ukDay(new Date(N + DAY));
+    const nice = ukNiceDate(todays[0].ko);                                    // e.g. "Thursday 9 July"
+    if(kd === t0) return "later today";
+    if(kd === t1) return "tomorrow (" + nice + ")";
+    return "on " + nice;
+  })();
   const before = finished.filter(m => { const ko = kickoffUTC(m); return ko && ko.getTime() < (N - DAY); });
   const prevRows = computeRows(tallyTable(before, scores));
   const currRows = computeRows(tallyTable(finished, scores));
@@ -1055,6 +1068,7 @@ async function buildCommentaryMsg(matches, setStatus){
   try{
     const data = {
       phase: phase,
+      next_gameday_label: gamedayLabel,   // when the previewed fixtures are: "later today" / "tomorrow (…)" / "on <day>"
       player_pronouns: Object.fromEntries(PLAYERS.map(([p]) => [p, pronounsOf(p)])),
       roundup_note: "recent_results lists ONLY matches played in the last 24 hours (this is a daily round-up). " +
                     "games_played_in_tournament_total is the running total across all match-days so far. " +
@@ -1096,8 +1110,13 @@ async function buildCommentaryMsg(matches, setStatus){
       + "no headers), about 150-220 words, in warm, witty, polished prose \u2014 broadsheet-quality football writing with "
       + "a light, affectionate touch. Cover three things: (1) the recent results, with a little colour, naming the family "
       + "owner of each team; (2) how the sweepstake_table looks now; (3) a short preview of each upcoming fixture as a "
-      + "friendly duel between the two family owners, noting the stakes.\n\n"
+      + "friendly duel between the two family owners, noting the stakes. The fixtures given are the NEXT gameday's "
+      + "matches (they may be later today, tomorrow, or after a rest day of a few days) \u2014 preview that whole day.\n\n"
       + "STRICT ACCURACY RULES \u2014 follow exactly:\n"
+      + "\u2022 NEXT GAMEDAY: the fixtures are the next day that actually has matches. Use next_gameday_label to signpost "
+      + "WHEN they are (e.g. 'later today', 'tomorrow', or a named day like 'on Thursday 9 July'). Do NOT call them 'today' "
+      + "or 'tonight' unless next_gameday_label says today. If there is a multi-day gap, it's fine to note the rest days. "
+      + "If there are no fixtures at all, simply skip the preview.\n"
       + "\u2022 PRONOUNS: use each family member's pronouns EXACTLY as given in player_pronouns (a map of name -> pronouns, "
       + "e.g. 'she/her', 'he/him', 'they/them'). NEVER infer someone's gender from their name. If a player's pronouns are "
       + "'they/them', use singular they. This applies to every mention of that person.\n"
@@ -1124,7 +1143,7 @@ async function buildCommentaryMsg(matches, setStatus){
     const text = await askClaudeText(prompt);
     return withFlags(text.trim()) + LEADERBOARD_FOOTER;
   }catch(_){
-    return withFlags(localCommentary(results, scores, prevRows, currRows, todays, knockout)) + LEADERBOARD_FOOTER;
+    return withFlags(localCommentary(results, scores, prevRows, currRows, todays, knockout, gamedayLabel)) + LEADERBOARD_FOOTER;
   }
 }
 
