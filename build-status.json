@@ -1,10 +1,10 @@
 {
- "ran": "2026-07-14T20:10:32+00:00",
+ "ran": "2026-07-14T21:15:12+00:00",
  "diagnostics": {
-  "footballdata": "100 finished matches (newest update 2026-07-14T05:20:10Z)",
-  "worldcup26": "100 finished matches",
-  "openfootball": "100 finished matches"
+  "footballdata": "101 finished matches (newest update 2026-07-14T21:04:16Z)",
+  "worldcup26": "101 finished matches",
+  "openfootball": "101 finished matches"
  },
- "played": 100,
+ "played": 101,
  "unmatched": []
 }
