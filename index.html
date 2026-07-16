@@ -607,6 +607,17 @@ const NEXT_ROUND = {
   "Quarter-final":"semi-finals", "Semi-final":"final"
 };
 
+/* What's actually at stake in a knockout tie, phrased correctly for every round type
+   (the final and the third-place play-off are NOT "win or go home / advance"). */
+function koStake(rnd){
+  if(rnd === "Final") return "the winner are crowned world champions; the loser finishes runners-up";
+  if(rnd === "Third-place play-off") return "the winner takes third place and the bronze medal; the loser finishes fourth";
+  if(rnd === "Semi-final") return "the winner reaches the World Cup final; the loser drops into the third-place play-off";
+  const nxt = NEXT_ROUND[rnd];
+  return nxt ? ("the winner advances to the " + nxt + "; the loser is out of the tournament")
+             : "the winner goes through; the loser is out";
+}
+
 /* ---------- Leaderboard ---------- */
 const mKey = m => m.a + "|" + m.b + "|" + m.d;
 
@@ -976,10 +987,8 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout, 
       const duel = p1 + " (" + ord(posOf[p1]) + ") meets " + p2 + " (" + ord(posOf[p2]) + ") in the family stakes. ";
       let stakeLine;
       if(knockout){
-        const nxt = NEXT_ROUND[rnd] || "the next round";
-        stakeLine = (rnd === "Final"
-          ? "Winner takes the World Cup itself. "
-          : "Winner books a place in the " + nxt + "; loser is out of the tournament. ");
+        const s = koStake(rnd);
+        stakeLine = s ? (s.charAt(0).toUpperCase() + s.slice(1) + ". ") : "";
       } else {
         const c1 = climbWithWin(p1), c2 = climbWithWin(p2);
         const stakes = [];
@@ -992,7 +1001,14 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout, 
         }
         stakeLine = stakes.length ? (stakes.join(", while ") + ". ").replace(/^./, c => c.toUpperCase()) : "";
       }
-      const kicker = knockout
+      const special = rnd === "Final" || rnd === "Third-place play-off";
+      const kicker = special
+        ? P("kickSpecial", [
+            "One for the ages \u2014 savour it.",
+            "The tournament's last act. Enjoy every minute.",
+            "May the better side prevail."
+          ])
+        : knockout
         ? P("kickKO", [
             "No draws here \u2014 one of them goes home.",
             "Win or go home. Hold onto something.",
@@ -1099,8 +1115,8 @@ async function buildCommentaryMsg(matches, setStatus){
         return {
         kickoff: ukTime(x.ko) + " BST", venue: x.m.g ? venueLabel(x.m.g) : null,
         round: rnd,                                   // e.g. "Round of 32"; null in the group stage
-        knockout: !!rnd,                              // true => single-elimination, win or go home
-        advances_to: rnd ? (NEXT_ROUND[rnd] || (rnd === "Final" ? "lifts the trophy" : "the next round")) : null,
+        knockout: !!rnd,                              // true => single-elimination
+        stake: rnd ? koStake(rnd) : null,             // exactly what's at play (advancement / title / bronze)
         // The ONLY two teams in this fixture, each with the family member who owns it:
         team_home: x.m.a, owner_home: TEAM_TO_PLAYER[x.m.a] || null,
         team_away: x.m.b, owner_away: TEAM_TO_PLAYER[x.m.b] || null,
@@ -1129,11 +1145,13 @@ async function buildCommentaryMsg(matches, setStatus){
       + "\u2022 PRONOUNS: use each family member's pronouns EXACTLY as given in player_pronouns (a map of name -> pronouns, "
       + "e.g. 'she/her', 'he/him', 'they/them'). NEVER infer someone's gender from their name. If a player's pronouns are "
       + "'they/them', use singular they. This applies to every mention of that person.\n"
-      + "\u2022 For each fixture: if knockout is true it is a single-elimination tie (its 'round' is given, e.g. Round of 32). "
-      + "Preview it as win-or-go-home \u2014 the WINNER advances to 'advances_to' and the LOSER is eliminated from the tournament. "
-      + "Make the survival stakes and the bragging rights between the two owners the heart of it, not league-table movement. "
-      + "If knockout is false it is a group game; there what a win means is climbing the sweepstake table. "
-      + "If these are the first knockout fixtures, you may note the group stage is done and the real drama begins.\n"
+      + "\u2022 For each fixture: if knockout is true it is a single-elimination tie (its 'round' is given, e.g. Round of 32, "
+      + "Semi-final, Final, Third-place play-off). Its 'stake' field states EXACTLY what is at play \u2014 use it and preview the "
+      + "fixture accordingly. Note that a Final is for the trophy (not 'win or go home'), and a Third-place play-off is a "
+      + "bronze-medal match between two sides who are already out of the title race, so do NOT frame it as reaching a later "
+      + "round. Make the stake and the bragging rights between the two owners the heart of it, not league-table movement. "
+      + "Preview EVERY fixture listed, including a Final or a Third-place play-off. "
+      + "If knockout is false it is a group game; there what a win means is climbing the sweepstake table.\n"
       + "\u2022 recent_results are ONLY the games from the last 24 hours. Do NOT imply they are the only games of the "
       + "tournament or state a tournament-wide game count from them \u2014 use games_played_in_tournament_total for any total. "
       + "Frame the recap as the latest match-day, not the start of the tournament (unless the total equals the recent count).\n"
