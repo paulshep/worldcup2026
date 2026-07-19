@@ -610,7 +610,7 @@ const NEXT_ROUND = {
 /* What's actually at stake in a knockout tie, phrased correctly for every round type
    (the final and the third-place play-off are NOT "win or go home / advance"). */
 function koStake(rnd){
-  if(rnd === "Final") return "the winner are crowned world champions; the loser finishes runners-up";
+  if(rnd === "Final") return "the winner is crowned world champion; the loser finishes runners-up";
   if(rnd === "Third-place play-off") return "the winner takes third place and the bronze medal; the loser finishes fourth";
   if(rnd === "Semi-final") return "the winner reaches the World Cup final; the loser drops into the third-place play-off";
   const nxt = NEXT_ROUND[rnd];
@@ -785,12 +785,29 @@ const fill = (tpl, v) => tpl.replace(/\{(\w+)\}/g, (_, k) => (v[k] !== undefined
 const ord = n => n + (n%10==1&&n%100!=11?"st":n%10==2&&n%100!=12?"nd":n%10==3&&n%100!=13?"rd":"th");
 const aAn = w => (/^[AEIOUaeiou]/.test(w) ? "an " : "a ") + w;
 
-function localCommentary(results, scores, prevRows, currRows, todays, knockout, gamedayLabel){
+function localCommentary(results, scores, prevRows, currRows, todays, knockout, gamedayLabel, decider){
   const P = makePicker();
   const L = [];
 
   const ukHour = parseInt(new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"numeric",hour12:false}).format(new Date()), 10);
   const greeting = ukHour < 12 ? "GOOD MORNING" : (ukHour < 18 ? "GOOD AFTERNOON" : "GOOD EVENING");
+  if(decider && !decider.same_owner){
+    const [c1, c2] = decider.contenders;
+    L.push("\ud83c\udfc6 " + greeting + " \u2014 AND WELCOME TO FINAL DAY.");
+    L.push("");
+    L.push("Thirty-one days, 103 matches, 48 nations \u2014 and it comes down to this. " +
+           decider.contenders[0].team + " v " + decider.contenders[1].team + ", " + decider.kickoff + ", " +
+           "and with it the sweepstake itself.");
+    L.push("");
+    L.push("Two of us are left standing. " + c1.player + " has " + c1.team +
+           (c1.other_team ? " (" + c1.other_team + " long since departed)" : "") + "; " +
+           c2.player + " has " + c2.team +
+           (c2.other_team ? " (" + c2.other_team + " likewise)" : "") + ". " +
+           "Whichever of those two lifts the trophy tonight, that's our sweepstake champion. No draws, no debate, no consolation.");
+    L.push("");
+    L.push("Everyone else is now a spectator \u2014 and what a thing to spectate.");
+    L.push("");
+  } else {
   L.push(P("open", [
     "\ud83c\udf99\ufe0f " + greeting + " AND WELCOME, wherever in the world you find yourself!",
     "\ud83c\udf99\ufe0f HELLO AND WELCOME back to the gantry for another helping of this glorious tournament!",
@@ -800,6 +817,7 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout, 
     "\ud83c\udf99\ufe0f Strap yourselves in. The greatest show on earth rolls on!"
   ]));
   L.push("");
+  }
 
   /* ---------- Results recap ---------- */
   const scored = results.map(m => ({m, sc: scores[mKey(m)]})).filter(x => x.sc);
@@ -1034,6 +1052,13 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout, 
     ]));
   }
   L.push("");
+  if(decider && !decider.same_owner){
+    const [c1, c2] = decider.contenders;
+    L.push("Best of luck to " + c1.player + " and " + c2.player + " \u2014 one of you ends tonight as champion, " +
+           "and the other as the person who very nearly was. The rest of us will be watching with a drink and no skin in the game whatsoever.");
+    L.push("");
+    L.push("Enjoy the final, all. It's been a joy.");
+  } else {
   L.push(P("sign", [
     "That's your lot from the gantry. It's a funny old game \u2014 see you tomorrow!",
     "Until next time: mind those late kick-offs!",
@@ -1041,6 +1066,7 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout, 
     "Back tomorrow \u2014 same gantry, same questionable predictions.",
     "From all of us up here: enjoy every minute. It comes around but once every four years."
   ]));
+  }
   return "\u26bd\ud83c\udf99\ufe0f THE COMMENTARY BOX\n\n" + L.join("\n");
 }
 
@@ -1086,6 +1112,27 @@ async function buildCommentaryMsg(matches, setStatus){
   const phase = knockout ? "knockout stage (extra time and penalties possible)"
                          : "group stage (matches CAN end in a draw; there is NO extra time or penalties)";
 
+  /* FINAL DAY: when the next fixture is the Final itself, the sweepstake comes down to the two
+     owners of the finalists. The whole message should be built around that head-to-head. */
+  const finalFix = todays.find(x => koRound(x.ko) === "Final");
+  const decider = (() => {
+    if(!finalFix) return null;
+    const a = finalFix.m.a, b = finalFix.m.b;
+    const pa = TEAM_TO_PLAYER[a], pb = TEAM_TO_PLAYER[b];
+    if(!pa || !pb) return null;
+    const posIn = n => { const i = currRows.findIndex(r => r.p === n); return i >= 0 ? i + 1 : null; };
+    return {
+      is_final_day: true,
+      kickoff: ukTime(finalFix.ko) + " BST",
+      contenders: [
+        {player: pa, pronouns: pronounsOf(pa), team: a, table_position: posIn(pa), other_team: (PLAYERS.find(([p]) => p === pa) || [null, []])[1].filter(t => t !== a)[0] || null},
+        {player: pb, pronouns: pronounsOf(pb), team: b, table_position: posIn(pb), other_team: (PLAYERS.find(([p]) => p === pb) || [null, []])[1].filter(t => t !== b)[0] || null}
+      ],
+      same_owner: pa === pb,
+      note: "The sweepstake is decided tonight: whichever of these two teams lifts the trophy, that team's owner wins the sweepstake."
+    };
+  })();
+
   /* Prefer Claude-written commentary when the environment allows */
   setStatus("Warming up the commentary box\u2026");
   const fmtScore = s => s ? (s[0] + "-" + s[1] + (s.length===4 ? " ("+s[2]+"-"+s[3]+" pens)" : (s[2]==="aet"?" aet":""))) : "not yet confirmed";
@@ -1093,6 +1140,7 @@ async function buildCommentaryMsg(matches, setStatus){
   try{
     const data = {
       phase: phase,
+      final_day: decider,                 // non-null only on the day of the Final
       next_gameday_label: gamedayLabel,   // when the previewed fixtures are: "later today" / "tomorrow (…)" / "on <day>"
       player_pronouns: Object.fromEntries(PLAYERS.map(([p]) => [p, pronounsOf(p)])),
       roundup_note: "recent_results lists ONLY matches played in the last 24 hours (this is a daily round-up). " +
@@ -1138,6 +1186,13 @@ async function buildCommentaryMsg(matches, setStatus){
       + "friendly duel between the two family owners, noting the stakes. The fixtures given are the NEXT gameday's "
       + "matches (they may be later today, tomorrow, or after a rest day of a few days) \u2014 preview that whole day.\n\n"
       + "STRICT ACCURACY RULES \u2014 follow exactly:\n"
+      + "\u2022 FINAL DAY: if final_day is present, this is the last day of the tournament and the whole message should be "
+      + "built around it. The World Cup final decides the sweepstake: the two contenders listed each own one of the "
+      + "finalists, and whichever team lifts the trophy, that owner wins the whole thing. Set the scene properly \u2014 open by "
+      + "naming the two contenders and what is at stake, give a sense of the road each has travelled (their other team, "
+      + "where they sit in the table), build the head-to-head, and close by wishing both well. Treat it as a genuine "
+      + "winner-takes-all showdown between those two people. Do NOT declare anyone the sweepstake winner already, and do "
+      + "NOT imply the league table settles it \u2014 tonight settles it. Do not preview any other fixture.\n"
       + "\u2022 NEXT GAMEDAY: the fixtures are the next day that actually has matches. Use next_gameday_label to signpost "
       + "WHEN they are (e.g. 'later today', 'tomorrow', or a named day like 'on Thursday 9 July'). Do NOT call them 'today' "
       + "or 'tonight' unless next_gameday_label says today. If there is a multi-day gap, it's fine to note the rest days. "
@@ -1170,7 +1225,7 @@ async function buildCommentaryMsg(matches, setStatus){
     const text = await askClaudeText(prompt);
     return withFlags(text.trim()) + LEADERBOARD_FOOTER;
   }catch(_){
-    return withFlags(localCommentary(results, scores, prevRows, currRows, todays, knockout, gamedayLabel)) + LEADERBOARD_FOOTER;
+    return withFlags(localCommentary(results, scores, prevRows, currRows, todays, knockout, gamedayLabel, decider)) + LEADERBOARD_FOOTER;
   }
 }
 
