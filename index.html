@@ -854,7 +854,8 @@ function localCommentary(results, scores, prevRows, currRows, todays, knockout, 
 
     scored.forEach(({m, sc}) => {
       const p1 = TEAM_TO_PLAYER[m.a], p2 = TEAM_TO_PLAYER[m.b];
-      const line = m.a + " " + sc[0] + "\u2013" + sc[1] + " " + m.b + scoreSuffix(sc);
+      const rRnd = koRound(kickoffUTC(m));
+      const line = m.a + " " + sc[0] + "\u2013" + sc[1] + " " + m.b + scoreSuffix(sc) + (rRnd ? "  (" + rRnd + ")" : "");
       const diff = sc[0] - sc[1];
       let colour;
       if(knockout && sc.length === 4){            // penalty shootout (knockouts only)
@@ -1150,10 +1151,14 @@ async function buildCommentaryMsg(matches, setStatus){
       games_played_in_tournament_total: finished.length,
       recent_results: results.map(m => {
         const s = scores[mKey(m)];
+        const ko = kickoffUTC(m);
+        const rnd = koRound(ko);
         return {
           team_home: m.a, owner_home: TEAM_TO_PLAYER[m.a] || null,
           team_away: m.b, owner_away: TEAM_TO_PLAYER[m.b] || null,
-          score: fmtScore(s)
+          score: fmtScore(s),
+          round: rnd,                                  // e.g. "Third-place play-off"; null in the group stage
+          what_it_decided: rnd ? koStake(rnd) : null   // describe the result using THIS, never guess the round
         };
       }),
       sweepstake_table: currRows.map((r,i) => ({pos: i+1, player: r.p, played: r.P,
@@ -1186,6 +1191,9 @@ async function buildCommentaryMsg(matches, setStatus){
       + "friendly duel between the two family owners, noting the stakes. The fixtures given are the NEXT gameday's "
       + "matches (they may be later today, tomorrow, or after a rest day of a few days) \u2014 preview that whole day.\n\n"
       + "STRICT ACCURACY RULES \u2014 follow exactly:\n"
+      + "\u2022 ROUNDS: every result and fixture carries its own 'round' field. Describe each match using EXACTLY that "
+      + "round (and what_it_decided / stake). NEVER infer or guess which round a match was \u2014 in particular, do not call "
+      + "a third-place play-off a semi-final, or a play-off a final. If round is null it was a group game.\n"
       + "\u2022 FINAL DAY: if final_day is present, this is the last day of the tournament and the whole message should be "
       + "built around it. The World Cup final decides the sweepstake: the two contenders listed each own one of the "
       + "finalists, and whichever team lifts the trophy, that owner wins the whole thing. Set the scene properly \u2014 open by "
