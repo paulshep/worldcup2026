@@ -1,8 +1,8 @@
-name: Leaderboard rebuild (every 15 min)
+name: Leaderboard rebuild (manual only)
 
+# Scheduled runs were stopped after the 2026 tournament finished.
+# Left runnable on demand via the Actions tab or a workflow_dispatch API call.
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 permissions:
